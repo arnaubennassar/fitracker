@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#f4efe5"/>
+  <rect x="184" y="122" width="432" height="266" rx="26" fill="#173226"/>
+  <path d="M240 326c54-74 112-112 172-112s118 38 172 112" stroke="#f0b24a" stroke-width="18" fill="none"/>
+  <circle cx="320" cy="326" r="44" fill="#145c47"/>
+  <circle cx="480" cy="326" r="44" fill="#145c47"/>
+  <rect x="256" y="176" width="288" height="66" rx="16" fill="#f6f3ea"/>
+  <text x="280" y="220" fill="#145c47" font-family="Avenir Next, sans-serif" font-size="36" font-weight="700">60s hard / 60s easy</text>
+  <text x="40" y="70" fill="#173226" font-family="Avenir Next, sans-serif" font-size="34" font-weight="700">Bike Intervals</text>
+</svg>

@@ -2,13 +2,20 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Fitracker",
-    short_name: "Fitracker",
-    description: "Mobile-first workout tracking for Arnau and Fitnaista.",
-    start_url: "/",
+    background_color: "#f3efe6",
+    description: "Fast mobile workout tracking for assigned training.",
     display: "standalone",
-    background_color: "#f6f1e8",
-    theme_color: "#0c6b58",
-    icons: [],
+    icons: [
+      {
+        sizes: "any",
+        src: "/icon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+    name: "Fitracker",
+    orientation: "portrait",
+    short_name: "Fitracker",
+    start_url: "/",
+    theme_color: "#145c47",
   };
 }

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#f7f4ec"/>
+  <circle cx="350" cy="125" r="54" fill="#145c47"/>
+  <path d="M346 182l108 58-56 88-122-62z" fill="#f0b24a"/>
+  <path d="M448 248l56-44" stroke="#173226" stroke-width="24" stroke-linecap="round"/>
+  <path d="M334 272l-24 106 98 32" stroke="#145c47" stroke-width="26" stroke-linecap="round" fill="none"/>
+  <path d="M308 382l-52 122m152-88l96 88" stroke="#173226" stroke-width="28" stroke-linecap="round"/>
+  <text x="42" y="70" fill="#173226" font-family="Avenir Next, sans-serif" font-size="34" font-weight="700">Upright torso, heels down</text>
+</svg>

@@ -1,23 +1,36 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 
-import { env } from "./env";
+import { AppShell } from "./_components/app-shell";
+import { ServiceWorkerRegister } from "./_components/service-worker-register";
+import { AppProviders } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: env.NEXT_PUBLIC_APP_NAME,
-  description: "Mobile-first bootstrap for the Fitracker frontend.",
+  title: "Fitracker",
+  description: "Mobile-first workout execution for assigned training.",
   manifest: "/manifest.webmanifest",
+  icons: {
+    apple: "/icon.svg",
+    icon: "/icon.svg",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Fitracker",
+  },
 };
 
-type RootLayoutProps = {
-  children: ReactNode;
-};
-
-export default function RootLayout({ children }: RootLayoutProps) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AppProviders>
+          <AppShell>{children}</AppShell>
+          <ServiceWorkerRegister />
+        </AppProviders>
+      </body>
     </html>
   );
 }

@@ -2,7 +2,9 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { requireUserSession } from "../lib/user-session.js";
 import {
+  countWorkoutSessions,
   getWorkoutSessionDetail,
+  listWorkoutSessionRows,
   mapWorkoutSessionSetLogRow,
 } from "../repos/workout-sessions.js";
 import {
@@ -377,6 +379,19 @@ const sessionSchema = {
     },
     sets: { type: "array", items: setLogSchema },
     feedback: { anyOf: [feedbackSchema, { type: "null" }] },
+  },
+} as const;
+
+const sessionListQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    limit: { type: "integer", minimum: 1, maximum: 50 },
+    offset: { type: "integer", minimum: 0 },
+    status: {
+      type: "string",
+      enum: ["planned", "in_progress", "completed", "abandoned"],
+    },
   },
 } as const;
 
@@ -953,6 +968,44 @@ async function getMyWorkoutSession(
   return detail;
 }
 
+async function listMyWorkoutSessions(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const userId = getUserId(request);
+  if (!userId) return reply;
+
+  const query =
+    (request.query as
+      | {
+          limit?: number;
+          offset?: number;
+          status?: string;
+        }
+      | undefined) ?? {};
+  const filters = {
+    userId,
+    ...(query.status ? { status: query.status } : {}),
+  };
+
+  const limit = Math.min(query.limit ?? 20, 50);
+  const offset = query.offset ?? 0;
+  const items = listWorkoutSessionRows(request.server.db, filters, {
+    limit,
+    offset,
+  })
+    .map((session) => getSessionDetailForUser(request, session.id, userId))
+    .filter(Boolean);
+  const total = countWorkoutSessions(request.server.db, filters);
+
+  return {
+    items,
+    limit,
+    offset,
+    total,
+  };
+}
+
 async function updateMyWorkoutSession(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -1524,6 +1577,48 @@ export function userWorkoutRoutes({
         },
       }),
       handler: getMyExerciseDetail,
+      security,
+    },
+    {
+      method: "GET",
+      operationId: "listMyWorkoutSessions",
+      preHandler: authHandler,
+      responseContentType: "application/json",
+      response: {
+        200: {
+          type: "object",
+          required: ["items", "limit", "offset", "total"],
+          properties: {
+            items: { type: "array", items: sessionSchema },
+            limit: { type: "integer" },
+            offset: { type: "integer" },
+            total: { type: "integer" },
+          },
+        },
+        401: errorResponseSchema,
+      },
+      summary: "List workout sessions for the current user.",
+      tags: ["user-workouts"],
+      url: `${apiBasePath}/me/workout-sessions`,
+      schema: buildRouteSchema({
+        tags: ["user-workouts"],
+        summary: "List workout sessions for the current user.",
+        querystring: sessionListQuerySchema,
+        response: {
+          200: {
+            type: "object",
+            required: ["items", "limit", "offset", "total"],
+            properties: {
+              items: { type: "array", items: sessionSchema },
+              limit: { type: "integer" },
+              offset: { type: "integer" },
+              total: { type: "integer" },
+            },
+          },
+          401: errorResponseSchema,
+        },
+      }),
+      handler: listMyWorkoutSessions,
       security,
     },
     {

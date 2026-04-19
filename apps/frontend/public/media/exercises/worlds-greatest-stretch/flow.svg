@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#f4efe5"/>
+  <circle cx="248" cy="154" r="46" fill="#145c47"/>
+  <path d="M252 196l96 70 74-48" stroke="#173226" stroke-width="26" stroke-linecap="round" fill="none"/>
+  <path d="M342 264l-118 184m120-66l154 84" stroke="#145c47" stroke-width="26" stroke-linecap="round"/>
+  <path d="M420 218l42-84 44 88" stroke="#f0b24a" stroke-width="18" stroke-linecap="round" fill="none"/>
+  <text x="40" y="70" fill="#173226" font-family="Avenir Next, sans-serif" font-size="34" font-weight="700">World's Greatest Stretch</text>
+</svg>

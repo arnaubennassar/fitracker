@@ -542,6 +542,15 @@ test("user session, workouts, sets, completion, and feedback flow", async () => 
     const sessionPayload = session.json();
     assert.equal(sessionPayload.status, "in_progress");
 
+    const inProgressSessions = await app.inject({
+      method: "GET",
+      url: "/api/v1/me/workout-sessions?status=in_progress&limit=5",
+      headers,
+    });
+    assert.equal(inProgressSessions.statusCode, 200);
+    assert.equal(inProgressSessions.json().items.length, 1);
+    assert.equal(inProgressSessions.json().items[0].id, sessionPayload.id);
+
     const firstSet = await app.inject({
       method: "POST",
       url: `/api/v1/me/workout-sessions/${sessionPayload.id}/sets`,
@@ -605,6 +614,15 @@ test("user session, workouts, sets, completion, and feedback flow", async () => 
     });
     assert.equal(feedback.statusCode, 200);
     assert.equal(feedback.json().difficultyRating, 7);
+
+    const allSessions = await app.inject({
+      method: "GET",
+      url: "/api/v1/me/workout-sessions?limit=10",
+      headers,
+    });
+    assert.equal(allSessions.statusCode, 200);
+    assert.ok(allSessions.json().items.length >= 3);
+    assert.equal(allSessions.json().items[0].feedback?.difficultyRating, 7);
 
     const loginOptions = await app.inject({
       method: "POST",

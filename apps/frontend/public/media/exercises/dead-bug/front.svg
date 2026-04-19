@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#f8f5ee"/>
+  <circle cx="274" cy="248" r="42" fill="#145c47"/>
+  <path d="M308 260h152" stroke="#173226" stroke-width="28" stroke-linecap="round"/>
+  <path d="M372 260l-58-102m44 102l78 110" stroke="#f0b24a" stroke-width="24" stroke-linecap="round"/>
+  <path d="M454 260l76-108m-62 108l92 126" stroke="#145c47" stroke-width="24" stroke-linecap="round"/>
+  <rect x="154" y="362" width="492" height="18" rx="9" fill="#173226" opacity=".15"/>
+  <text x="40" y="70" fill="#173226" font-family="Avenir Next, sans-serif" font-size="34" font-weight="700">Dead Bug</text>
+</svg>
