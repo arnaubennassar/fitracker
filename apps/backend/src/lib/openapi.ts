@@ -125,6 +125,16 @@ export function buildOpenApiDocument(app: FastifyInstance) {
         description:
           "Admin reporting on performed sessions, feedback, and adherence.",
       },
+      {
+        name: "user-auth",
+        description:
+          "Athlete passkey registration, passkey login, and session inspection.",
+      },
+      {
+        name: "user-workouts",
+        description:
+          "Athlete workout assignment, workout session, set logging, and feedback flows.",
+      },
     ],
     components: {
       securitySchemes: {
@@ -132,6 +142,11 @@ export function buildOpenApiDocument(app: FastifyInstance) {
           bearerFormat: "token",
           scheme: "bearer",
           type: "http",
+        },
+        sessionCookieAuth: {
+          in: "cookie",
+          name: "fitracker_session",
+          type: "apiKey",
         },
       },
     },

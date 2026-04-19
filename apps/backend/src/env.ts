@@ -14,6 +14,11 @@ const backendEnvSchema = z.object({
     .default("fitracker-local-admin-token-v1"),
   ADMIN_SEED_TOKEN_NAME: z.string().default("Local Coach Token"),
   API_BASE_PATH: z.string().default("/api/v1"),
+  AUTH_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  WEBAUTHN_ORIGIN: z.string().url().optional(),
+  WEBAUTHN_RP_ID: z.string().min(1).optional(),
+  WEBAUTHN_RP_NAME: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof backendEnvSchema>;

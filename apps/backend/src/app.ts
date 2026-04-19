@@ -12,6 +12,7 @@ import { adminRoutes } from "./routes/admin.js";
 import { buildDocsHtml } from "./routes/docs.js";
 import { buildRouteSchema, registerRoutes } from "./routes/registry.js";
 import { systemRoutes } from "./routes/system.js";
+import { userRoutes } from "./routes/user.js";
 
 type BuildAppOptions = {
   env: AppEnv;
@@ -68,6 +69,9 @@ export function buildApp({ env }: BuildAppOptions): FastifyInstance {
       openApiHandler: respondOpenApi,
     }),
     ...adminRoutes({
+      apiBasePath: env.API_BASE_PATH,
+    }),
+    ...userRoutes({
       apiBasePath: env.API_BASE_PATH,
     }),
   ]);

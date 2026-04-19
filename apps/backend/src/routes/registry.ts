@@ -28,7 +28,7 @@ export type OpenApiOperation = {
     content: Record<string, { schema: JsonSchema }>;
     required: boolean;
   };
-  security?: Array<{ bearerAuth: string[] }>;
+  security?: Array<Record<string, string[]>>;
   summary: string;
   tags: string[];
 };
@@ -52,7 +52,7 @@ export type AppRouteDefinition = {
     summary: string;
     tags: string[];
   };
-  security?: Array<{ bearerAuth: string[] }>;
+  security?: Array<Record<string, string[]>>;
   summary: string;
   tags: string[];
   url: string;

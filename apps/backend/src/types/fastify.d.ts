@@ -16,5 +16,17 @@ declare module "fastify" {
       scopes: string[];
       tokenPreview: string;
     };
+    userSession?:
+      | {
+          expiresAt: string;
+          id: string;
+          lastSeenAt: string;
+          user: {
+            displayName: string;
+            id: string;
+            status: string;
+          };
+        }
+      | undefined;
   }
 }
