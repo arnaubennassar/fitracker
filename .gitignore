@@ -5,6 +5,8 @@ dist
 coverage
 *.tsbuildinfo
 .codex
+.data
+*.db
 .env
 .env.local
 .env.*.local

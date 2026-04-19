@@ -7,6 +7,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: env.NEXT_PUBLIC_APP_NAME,
   description: "Mobile-first bootstrap for the Fitracker frontend.",
+  manifest: "/manifest.webmanifest",
 };
 
 type RootLayoutProps = {

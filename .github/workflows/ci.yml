@@ -26,7 +26,17 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrate database
+        run: pnpm --filter @fitracker/backend migrate
+        env:
+          DATABASE_PATH: /tmp/fitracker-ci.db
+
+      - name: Seed database
+        run: pnpm --filter @fitracker/backend seed
+        env:
+          DATABASE_PATH: /tmp/fitracker-ci.db
 
       - name: Lint
         run: pnpm lint

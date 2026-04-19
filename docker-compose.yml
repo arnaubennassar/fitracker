@@ -6,6 +6,9 @@ services:
     environment:
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-3001}
+      DATABASE_PATH: ${DATABASE_PATH:-/data/app.db}
+      ADMIN_SEED_TOKEN: ${ADMIN_SEED_TOKEN:-fitracker-admin-dev-token}
+      API_BASE_PATH: ${API_BASE_PATH:-/api/v1}
     ports:
       - "3001:3001"
     volumes:
@@ -19,11 +22,10 @@ services:
       - backend
     environment:
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Fitracker}
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3001}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
       PORT: 3000
     ports:
       - "3000:3000"
 
 volumes:
   app_data:
-
