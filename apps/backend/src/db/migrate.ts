@@ -1,39 +1,22 @@
-import { nowIso } from "../lib/time.js";
-import { getDb } from "./client.js";
-import { migrationTableSql, migrations } from "./schema.js";
+import { loadEnv } from "../env.js";
+import { createDatabase } from "./client.js";
+import { migrateDatabase } from "./migrations.js";
 
-export function runMigrations() {
-  const db = getDb();
+const env = loadEnv();
+const db = createDatabase(env.DATABASE_PATH);
 
-  db.exec(migrationTableSql);
+try {
+  const result = migrateDatabase(db);
 
-  const applied = new Set(
-    (
-      db
-        .prepare("SELECT name FROM schema_migrations ORDER BY id ASC")
-        .all() as Array<{
-        name: string;
-      }>
-    ).map((entry) => entry.name),
-  );
+  console.log(`Applied ${result.applied.length} migration(s).`);
 
-  for (const migration of migrations) {
-    if (applied.has(migration.name)) {
-      continue;
-    }
-
-    db.exec("BEGIN");
-
-    try {
-      db.exec(migration.sql);
-      db.prepare(
-        "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
-      ).run(migration.name, nowIso());
-      db.exec("COMMIT");
-      applied.add(migration.name);
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
+  if (result.applied.length === 0) {
+    console.log("Database schema already up to date.");
+  } else {
+    for (const migration of result.applied) {
+      console.log(`- ${migration}`);
     }
   }
+} finally {
+  db.close();
 }

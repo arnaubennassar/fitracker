@@ -11,6 +11,7 @@
     "dev": "pnpm --parallel --filter @fitracker/backend --filter @fitracker/frontend dev",
     "format": "biome check --write .",
     "lint": "biome check .",
+    "test": "pnpm --filter @fitracker/backend test",
     "typecheck": "pnpm --filter @fitracker/backend typecheck && pnpm --filter @fitracker/frontend typecheck"
   },
   "devDependencies": {

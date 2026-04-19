@@ -1,90 +1,58 @@
-export const migrationTableSql = `
-  CREATE TABLE IF NOT EXISTS schema_migrations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    applied_at TEXT NOT NULL
-  );
-`;
-
-export const initialMigration = {
-  name: "0001_initial_schema",
-  sql: `
-    CREATE TABLE users (
-      id TEXT PRIMARY KEY,
-      display_name TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE admin_tokens (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      token_hash TEXT NOT NULL,
-      scopes_json TEXT NOT NULL,
-      last_used_at TEXT,
-      expires_at TEXT,
-      created_at TEXT NOT NULL,
-      revoked_at TEXT
-    );
-
-    CREATE TABLE exercise_categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      description TEXT
-    );
-
-    CREATE TABLE exercises (
-      id TEXT PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      category_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      description TEXT,
-      instructions TEXT,
-      equipment TEXT,
-      tracking_mode TEXT NOT NULL,
-      difficulty TEXT NOT NULL,
-      primary_muscles_json TEXT NOT NULL,
-      secondary_muscles_json TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (category_id) REFERENCES exercise_categories(id)
-    );
-
-    CREATE TABLE workout_templates (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT,
-      goal TEXT,
-      estimated_duration_min INTEGER,
-      difficulty TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE workout_template_exercises (
-      id TEXT PRIMARY KEY,
-      workout_template_id TEXT NOT NULL,
-      exercise_id TEXT NOT NULL,
-      sequence INTEGER NOT NULL,
-      block_label TEXT NOT NULL,
-      instruction_override TEXT,
-      target_sets INTEGER,
-      target_reps TEXT,
-      target_duration_seconds INTEGER,
-      rest_seconds INTEGER,
-      tempo TEXT,
-      rpe_target REAL,
-      is_optional INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (workout_template_id) REFERENCES workout_templates(id),
-      FOREIGN KEY (exercise_id) REFERENCES exercises(id)
-    );
-
-    CREATE UNIQUE INDEX workout_template_exercises_sequence_idx
-      ON workout_template_exercises(workout_template_id, sequence);
-  `,
+export type AdminTokenRow = {
+  created_at: string;
+  expires_at: string | null;
+  id: string;
+  last_used_at: string | null;
+  name: string;
+  revoked_at: string | null;
+  scopes: string;
+  token_hash: string;
+  token_preview: string;
 };
 
-export const migrations = [initialMigration];
+export type SeedExerciseCategory = {
+  description: string;
+  id: string;
+  name: string;
+};
+
+export type SeedExercise = {
+  categoryId: string;
+  description: string;
+  difficulty: "advanced" | "beginner" | "intermediate";
+  equipment: string[];
+  id: string;
+  instructions: string;
+  name: string;
+  primaryMuscles: string[];
+  secondaryMuscles: string[];
+  slug: string;
+  trackingMode: "distance" | "mixed" | "reps" | "time";
+};
+
+export type SeedWorkoutTemplate = {
+  description: string;
+  difficulty: "advanced" | "beginner" | "intermediate";
+  estimatedDurationMin: number;
+  goal: string;
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type SeedWorkoutTemplateExercise = {
+  blockLabel: string;
+  exerciseId: string;
+  id: string;
+  instructionOverride: string | null;
+  isOptional: boolean;
+  restSeconds: number | null;
+  rpeTarget: number | null;
+  sequence: number;
+  targetDurationSeconds: number | null;
+  targetRepsMax: number | null;
+  targetRepsMin: number | null;
+  targetSets: number | null;
+  tempo: string | null;
+  workoutTemplateId: string;
+};

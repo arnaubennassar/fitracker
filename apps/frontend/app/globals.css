@@ -124,6 +124,7 @@ p {
 }
 
 .status-pill {
+  display: inline-flex;
   justify-self: start;
   padding: 0.75rem 1rem;
   border-radius: 999px;
@@ -132,6 +133,7 @@ p {
   font-family: var(--font-heading), sans-serif;
   font-size: 0.9rem;
   font-weight: 600;
+  text-decoration: none;
 }
 
 @media (min-width: 700px) {

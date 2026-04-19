@@ -38,6 +38,7 @@ curl -H "Authorization: Bearer $ADMIN_SEED_TOKEN" \
 
 ```bash
 pnpm lint
+pnpm test
 pnpm typecheck
 pnpm build
 ```

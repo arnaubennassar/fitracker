@@ -32,7 +32,9 @@ export default function HomePage() {
           <h2>Frontend to backend contract</h2>
           <p>{env.NEXT_PUBLIC_API_BASE_URL}</p>
         </div>
-        <div className="status-pill">Ready for Phase 3</div>
+        <a className="status-pill" href="/docs">
+          Open backend docs
+        </a>
       </section>
     </main>
   );

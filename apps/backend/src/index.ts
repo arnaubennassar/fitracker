@@ -1,7 +1,8 @@
 import { buildApp } from "./app.js";
-import { env } from "./env.js";
+import { loadEnv } from "./env.js";
 
-const app = buildApp();
+const env = loadEnv();
+const app = buildApp({ env });
 
 async function start() {
   try {

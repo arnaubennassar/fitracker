@@ -4,10 +4,13 @@ services:
       context: .
       dockerfile: apps/backend/Dockerfile
     environment:
+      APP_NAME: ${APP_NAME:-Fitracker}
       HOST: ${HOST:-0.0.0.0}
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: ${PORT:-3001}
       DATABASE_PATH: ${DATABASE_PATH:-/data/app.db}
-      ADMIN_SEED_TOKEN: ${ADMIN_SEED_TOKEN:-fitracker-admin-dev-token}
+      ADMIN_SEED_TOKEN: ${ADMIN_SEED_TOKEN:-fitracker-local-admin-token-v1}
+      ADMIN_SEED_TOKEN_NAME: ${ADMIN_SEED_TOKEN_NAME:-Local Coach Token}
       API_BASE_PATH: ${API_BASE_PATH:-/api/v1}
     ports:
       - "3001:3001"
@@ -21,6 +24,7 @@ services:
     depends_on:
       - backend
     environment:
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:3001}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Fitracker}
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
       PORT: 3000

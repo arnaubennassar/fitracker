@@ -2,24 +2,29 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { env } from "../env.js";
-
-let database: DatabaseSync | undefined;
-
-export function getDb() {
-  if (!database) {
-    const databasePath =
-      env.DATABASE_PATH === ":memory:"
-        ? env.DATABASE_PATH
-        : resolve(process.cwd(), env.DATABASE_PATH);
-
-    if (databasePath !== ":memory:") {
-      mkdirSync(dirname(databasePath), { recursive: true });
-    }
-
-    database = new DatabaseSync(databasePath);
-    database.exec("PRAGMA foreign_keys = ON;");
+export function resolveDatabasePath(databasePath: string) {
+  if (databasePath === ":memory:") {
+    return databasePath;
   }
 
-  return database;
+  return resolve(process.cwd(), databasePath);
+}
+
+export function createDatabase(databasePath: string) {
+  const resolvedPath = resolveDatabasePath(databasePath);
+
+  if (resolvedPath !== ":memory:") {
+    mkdirSync(dirname(resolvedPath), {
+      recursive: true,
+    });
+  }
+
+  const db = new DatabaseSync(resolvedPath);
+  db.exec("PRAGMA foreign_keys = ON");
+
+  if (resolvedPath !== ":memory:") {
+    db.exec("PRAGMA journal_mode = WAL");
+  }
+
+  return db;
 }
