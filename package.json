@@ -1,0 +1,21 @@
+{
+  "name": "fitracker",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.11.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @fitracker/backend build && pnpm --filter @fitracker/frontend build",
+    "dev": "pnpm --parallel --filter @fitracker/backend --filter @fitracker/frontend dev",
+    "format": "biome check --write .",
+    "lint": "biome check .",
+    "typecheck": "pnpm --filter @fitracker/backend typecheck && pnpm --filter @fitracker/frontend typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.15.30",
+    "typescript": "^5.8.3"
+  }
+}
