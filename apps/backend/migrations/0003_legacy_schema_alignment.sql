@@ -1,18 +1,3 @@
-ALTER TABLE admin_tokens
-ADD COLUMN scopes TEXT;
-
-ALTER TABLE admin_tokens
-ADD COLUMN token_preview TEXT;
-
-ALTER TABLE workout_templates
-ADD COLUMN slug TEXT;
-
-ALTER TABLE workout_template_exercises
-ADD COLUMN target_reps_min INTEGER;
-
-ALTER TABLE workout_template_exercises
-ADD COLUMN target_reps_max INTEGER;
-
 UPDATE admin_tokens
 SET scopes = COALESCE(scopes, '[]')
 WHERE scopes IS NULL;

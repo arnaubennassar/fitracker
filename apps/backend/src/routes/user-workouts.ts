@@ -2,6 +2,14 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { requireUserSession } from "../lib/user-session.js";
 import {
+  getWorkoutSessionDetail,
+  mapWorkoutSessionSetLogRow,
+} from "../repos/workout-sessions.js";
+import {
+  getWorkoutTemplateDetail,
+  getWorkoutTemplateSummary,
+} from "../repos/workout-templates.js";
+import {
   createId,
   dateSchema,
   dateTimeSchema,
@@ -39,43 +47,6 @@ type AssignmentListRow = {
   template_slug: string;
 };
 
-type TemplateExerciseRow = {
-  block_label: string;
-  exercise_description: string | null;
-  exercise_id: string;
-  exercise_name: string;
-  exercise_slug: string;
-  exercise_tracking_mode: string;
-  id: string;
-  instruction_override: string | null;
-  is_optional: number;
-  rest_seconds: number | null;
-  rir_target: number | null;
-  rpe_target: number | null;
-  sequence: number;
-  target_distance_meters: number | null;
-  target_duration_seconds: number | null;
-  target_reps: number | null;
-  target_reps_max: number | null;
-  target_reps_min: number | null;
-  target_sets: number | null;
-  target_weight: number | null;
-  target_weight_unit: string | null;
-  tempo: string | null;
-  workout_template_id: string;
-};
-
-type WorkoutTemplateRow = {
-  description: string | null;
-  difficulty: string | null;
-  estimated_duration_min: number | null;
-  goal: string | null;
-  id: string;
-  is_active: number;
-  name: string;
-  slug: string;
-};
-
 type ExerciseRow = {
   category_id: string;
   category_name: string;
@@ -102,23 +73,6 @@ type MediaRow = {
   url: string;
 };
 
-type SessionRow = {
-  assignment_id: string | null;
-  completed_at: string | null;
-  created_at: string;
-  duration_seconds: number | null;
-  id: string;
-  notes: string | null;
-  performed_version_snapshot: string;
-  started_at: string;
-  status: string;
-  template_name: string;
-  template_slug: string;
-  updated_at: string;
-  user_id: string;
-  workout_template_id: string;
-};
-
 type SetLogRow = {
   completed: number;
   exercise_id: string;
@@ -137,23 +91,6 @@ type SetLogRow = {
   set_number: number;
   workout_session_id: string;
   workout_template_exercise_id: string | null;
-};
-
-type FeedbackRow = {
-  difficulty_rating: number | null;
-  energy_level: number | null;
-  energy_rating: number | null;
-  free_text: string | null;
-  id: string;
-  mood: string | null;
-  notes: string | null;
-  overall_difficulty: number | null;
-  pain_flag: number;
-  pain_notes: string | null;
-  satisfaction: number | null;
-  soreness_level: number | null;
-  submitted_at: string;
-  workout_session_id: string;
 };
 
 const exerciseSummarySchema = {
@@ -576,82 +513,22 @@ function getUserId(request: FastifyRequest) {
   return request.userSession?.user.id ?? null;
 }
 
-function mapTemplateExercise(row: TemplateExerciseRow) {
-  return {
-    id: row.id,
-    sequence: row.sequence,
-    blockLabel: row.block_label,
-    instructionOverride: row.instruction_override,
-    targetSets: row.target_sets,
-    targetReps: row.target_reps,
-    targetRepsMin: row.target_reps_min,
-    targetRepsMax: row.target_reps_max,
-    targetWeight: row.target_weight,
-    targetWeightUnit: row.target_weight_unit,
-    targetDurationSeconds: row.target_duration_seconds,
-    targetDistanceMeters: row.target_distance_meters,
-    restSeconds: row.rest_seconds,
-    tempo: row.tempo,
-    rpeTarget: row.rpe_target,
-    rirTarget: row.rir_target,
-    isOptional: toBoolean(row.is_optional),
-    exercise: {
-      id: row.exercise_id,
-      slug: row.exercise_slug,
-      name: row.exercise_name,
-      description: row.exercise_description,
-      trackingMode: row.exercise_tracking_mode,
-      difficulty: "beginner",
-    },
-  };
-}
-
-function mapWorkoutTemplate(row: WorkoutTemplateRow) {
+function mapWorkoutTemplate(
+  row: NonNullable<ReturnType<typeof getWorkoutTemplateSummary>>,
+) {
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     description: row.description,
     goal: row.goal,
-    estimatedDurationMin: row.estimated_duration_min,
+    estimatedDurationMin: row.estimatedDurationMin,
     difficulty: row.difficulty,
   };
 }
 
-function getTemplateExercises(request: FastifyRequest, workoutId: string) {
-  const rows = request.server.db
-    .prepare(
-      `
-        SELECT
-          workout_template_exercises.*,
-          exercises.slug AS exercise_slug,
-          exercises.name AS exercise_name,
-          exercises.description AS exercise_description,
-          exercises.tracking_mode AS exercise_tracking_mode
-        FROM workout_template_exercises
-        INNER JOIN exercises ON exercises.id = workout_template_exercises.exercise_id
-        WHERE workout_template_exercises.workout_template_id = ?
-        ORDER BY sequence ASC, id ASC
-      `,
-    )
-    .all(workoutId) as TemplateExerciseRow[];
-
-  return rows.map(mapTemplateExercise);
-}
-
 function getWorkoutTemplate(request: FastifyRequest, workoutId: string) {
-  const row = request.server.db
-    .prepare(
-      `
-        SELECT id, slug, name, description, goal, estimated_duration_min, difficulty, is_active
-        FROM workout_templates
-        WHERE id = ?
-        LIMIT 1
-      `,
-    )
-    .get(workoutId) as WorkoutTemplateRow | undefined;
-
-  return row ?? null;
+  return getWorkoutTemplateSummary(request.server.db, workoutId);
 }
 
 function mapAssignmentRow(row: AssignmentListRow) {
@@ -748,45 +625,23 @@ function mapExerciseRow(row: ExerciseRow, media: MediaRow[] = []) {
   };
 }
 
-function mapSetLog(row: SetLogRow) {
-  return {
-    id: row.id,
-    workoutSessionId: row.workout_session_id,
-    workoutTemplateExerciseId: row.workout_template_exercise_id,
-    exercise: {
-      id: row.exercise_id,
-      name: row.exercise_name,
-    },
-    sequence: row.sequence,
-    setNumber: row.set_number,
-    performedReps: row.performed_reps,
-    performedWeight: row.performed_weight,
-    performedWeightUnit: row.performed_weight_unit,
-    performedDurationSeconds: row.performed_duration_seconds,
-    performedDistanceMeters: row.performed_distance_meters,
-    restSecondsActual: row.rest_seconds_actual,
-    rpe: row.rpe,
-    completed: toBoolean(row.completed),
-    notes: row.notes,
-    loggedAt: row.logged_at,
-  };
-}
-
-function mapFeedback(row: FeedbackRow | undefined) {
-  if (!row) {
+function mapFeedback(
+  feedback: NonNullable<ReturnType<typeof getWorkoutSessionDetail>>["feedback"],
+) {
+  if (!feedback) {
     return null;
   }
 
   return {
-    id: row.id,
-    workoutSessionId: row.workout_session_id,
-    mood: row.mood,
-    difficultyRating: row.difficulty_rating ?? row.overall_difficulty,
-    energyRating: row.energy_rating ?? row.energy_level,
-    painFlag: toBoolean(row.pain_flag),
-    painNotes: row.pain_notes,
-    freeText: row.free_text ?? row.notes,
-    submittedAt: row.submitted_at,
+    id: feedback.id,
+    workoutSessionId: feedback.workoutSessionId,
+    mood: feedback.mood,
+    difficultyRating: feedback.difficultyRating,
+    energyRating: feedback.energyRating,
+    painFlag: feedback.painFlag,
+    painNotes: feedback.painNotes,
+    freeText: feedback.freeText,
+    submittedAt: feedback.submittedAt,
   };
 }
 
@@ -795,59 +650,26 @@ function getSessionDetailForUser(
   sessionId: string,
   userId: string,
 ) {
-  const row = request.server.db
-    .prepare(
-      `
-        SELECT
-          workout_sessions.*,
-          workout_templates.name AS template_name,
-          workout_templates.slug AS template_slug
-        FROM workout_sessions
-        INNER JOIN workout_templates
-          ON workout_templates.id = workout_sessions.workout_template_id
-        WHERE workout_sessions.id = ? AND workout_sessions.user_id = ?
-        LIMIT 1
-      `,
-    )
-    .get(sessionId, userId) as SessionRow | undefined;
+  const session = getWorkoutSessionDetail(request.server.db, {
+    sessionId,
+    userId,
+  });
 
-  if (!row) {
+  if (!session) {
     return null;
   }
 
-  const setRows = request.server.db
-    .prepare(
-      `
-        SELECT
-          exercise_set_logs.*,
-          exercises.name AS exercise_name
-        FROM exercise_set_logs
-        INNER JOIN exercises ON exercises.id = exercise_set_logs.exercise_id
-        WHERE workout_session_id = ?
-        ORDER BY sequence ASC, set_number ASC
-      `,
-    )
-    .all(sessionId) as SetLogRow[];
-
-  const feedbackRow = request.server.db
-    .prepare("SELECT * FROM workout_feedback WHERE workout_session_id = ?")
-    .get(sessionId) as FeedbackRow | undefined;
-
   return {
-    id: row.id,
-    status: row.status,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
-    durationSeconds: row.duration_seconds,
-    notes: row.notes,
-    assignmentId: row.assignment_id,
-    workoutTemplate: {
-      id: row.workout_template_id,
-      name: row.template_name,
-      slug: row.template_slug,
-    },
-    sets: setRows.map(mapSetLog),
-    feedback: mapFeedback(feedbackRow),
+    id: session.id,
+    status: session.status,
+    startedAt: session.startedAt,
+    completedAt: session.completedAt,
+    durationSeconds: session.durationSeconds,
+    notes: session.notes,
+    assignmentId: session.assignmentId,
+    workoutTemplate: session.workoutTemplate,
+    sets: session.setLogs,
+    feedback: mapFeedback(session.feedback),
   };
 }
 
@@ -897,7 +719,7 @@ async function getMyWorkoutDetail(
   const params = request.params as { workoutId: string };
   const template = getWorkoutTemplate(request, params.workoutId);
 
-  if (!template || !toBoolean(template.is_active)) {
+  if (!template || !template.isActive) {
     return sendNotFound(
       reply,
       "WORKOUT_TEMPLATE_NOT_FOUND",
@@ -923,9 +745,22 @@ async function getMyWorkoutDetail(
     );
   }
 
+  const templateDetail = getWorkoutTemplateDetail(
+    request.server.db,
+    template.id,
+  );
+
+  if (!templateDetail) {
+    return sendNotFound(
+      reply,
+      "WORKOUT_TEMPLATE_NOT_FOUND",
+      "Workout template not found.",
+    );
+  }
+
   return {
-    ...mapWorkoutTemplate(template),
-    exercises: getTemplateExercises(request, template.id),
+    ...mapWorkoutTemplate(templateDetail),
+    exercises: templateDetail.exercises,
   };
 }
 
@@ -1044,9 +879,22 @@ async function createMyWorkoutSession(
 
   const id = createId("session");
   const now = nowIsoString();
+  const templateDetail = getWorkoutTemplateDetail(
+    request.server.db,
+    body.workoutTemplateId,
+  );
+
+  if (!templateDetail) {
+    return sendNotFound(
+      reply,
+      "WORKOUT_TEMPLATE_NOT_FOUND",
+      "Workout template not found.",
+    );
+  }
+
   const snapshot = {
-    template: mapWorkoutTemplate(template),
-    exercises: getTemplateExercises(request, template.id),
+    template: mapWorkoutTemplate(templateDetail),
+    exercises: templateDetail.exercises,
   };
 
   request.server.db
@@ -1072,7 +920,7 @@ async function createMyWorkoutSession(
     .run(
       id,
       userId,
-      template.id,
+      templateDetail.id,
       body.assignmentId ?? null,
       now,
       JSON.stringify(snapshot),
@@ -1267,7 +1115,7 @@ async function createSetLog(request: FastifyRequest, reply: FastifyReply) {
     )
     .get(id) as SetLogRow;
 
-  return reply.code(201).send(mapSetLog(row));
+  return reply.code(201).send(mapWorkoutSessionSetLogRow(row));
 }
 
 async function updateSetLog(request: FastifyRequest, reply: FastifyReply) {
@@ -1356,7 +1204,7 @@ async function updateSetLog(request: FastifyRequest, reply: FastifyReply) {
       );
     }
 
-    return mapSetLog(row);
+    return mapWorkoutSessionSetLogRow(row);
   }
 
   const result = request.server.db
@@ -1392,7 +1240,7 @@ async function updateSetLog(request: FastifyRequest, reply: FastifyReply) {
     )
     .get(params.setId) as SetLogRow;
 
-  return mapSetLog(row);
+  return mapWorkoutSessionSetLogRow(row);
 }
 
 async function completeMySession(request: FastifyRequest, reply: FastifyReply) {
@@ -1467,9 +1315,6 @@ async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
           painNotes?: string | null;
         }
       | undefined) ?? {};
-  const assignmentRow = request.server.db
-    .prepare("SELECT assignment_id FROM workout_sessions WHERE id = ? LIMIT 1")
-    .get(params.sessionId) as { assignment_id: string | null } | undefined;
   const feedbackId = createId("feedback");
   const now = nowIsoString();
 
@@ -1480,56 +1325,44 @@ async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
           id,
           workout_session_id,
           user_id,
-          assignment_id,
-          overall_difficulty,
-          energy_level,
-          soreness_level,
-          satisfaction,
-          notes,
-          submitted_at,
           mood,
           difficulty_rating,
           energy_rating,
           pain_flag,
           pain_notes,
-          free_text
+          free_text,
+          submitted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(workout_session_id) DO UPDATE SET
-          overall_difficulty = excluded.overall_difficulty,
-          energy_level = excluded.energy_level,
-          notes = excluded.notes,
-          submitted_at = excluded.submitted_at,
           mood = excluded.mood,
           difficulty_rating = excluded.difficulty_rating,
           energy_rating = excluded.energy_rating,
           pain_flag = excluded.pain_flag,
           pain_notes = excluded.pain_notes,
-          free_text = excluded.free_text
+          free_text = excluded.free_text,
+          submitted_at = excluded.submitted_at
       `,
     )
     .run(
       feedbackId,
       params.sessionId,
       userId,
-      assignmentRow?.assignment_id ?? null,
-      body.difficultyRating ?? null,
-      body.energyRating ?? null,
-      body.freeText ?? null,
-      now,
       body.mood ?? null,
       body.difficultyRating ?? null,
       body.energyRating ?? null,
       toSqliteBoolean(body.painFlag) ?? 0,
       body.painNotes ?? null,
       body.freeText ?? null,
+      now,
     );
 
-  const feedback = request.server.db
-    .prepare("SELECT * FROM workout_feedback WHERE workout_session_id = ?")
-    .get(params.sessionId) as FeedbackRow;
-
-  return mapFeedback(feedback);
+  return mapFeedback(
+    getWorkoutSessionDetail(request.server.db, {
+      sessionId: params.sessionId,
+      userId,
+    })?.feedback ?? null,
+  );
 }
 
 export function userWorkoutRoutes({

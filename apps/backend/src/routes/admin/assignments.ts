@@ -175,11 +175,6 @@ function mapAssignment(row: AssignmentRow) {
       name: row.workout_template_name,
       slug: row.workout_template_slug,
     },
-    template: {
-      id: row.workout_template_id,
-      name: row.workout_template_name,
-      slug: row.workout_template_slug,
-    },
     assignedBy: row.assigned_by,
     startsOn: row.starts_on,
     endsOn: row.ends_on,

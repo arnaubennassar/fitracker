@@ -27,7 +27,8 @@ export function buildOpenApiDocument(app: FastifyInstance) {
   const paths = app.routeIndex.reduce<Record<string, OpenApiPathItem>>(
     (result, route) => {
       const method = route.method.toLowerCase();
-      const existing = result[route.url] ?? {};
+      const openApiPath = route.url.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
+      const existing = result[openApiPath] ?? {};
       const operation: OpenApiPathItem[string] = {
         operationId: route.operationId,
         responses: Object.fromEntries(
@@ -80,7 +81,7 @@ export function buildOpenApiDocument(app: FastifyInstance) {
 
       existing[method] = operation;
 
-      result[route.url] = existing;
+      result[openApiPath] = existing;
 
       return result;
     },

@@ -43,42 +43,6 @@ function listMigrationFiles() {
     .sort();
 }
 
-function splitSqlStatements(contents: string) {
-  return contents
-    .split(/;\s*(?:\r?\n|$)/)
-    .map((statement) => statement.trim())
-    .filter(Boolean);
-}
-
-function isIgnorableLegacyMigrationError(error: unknown) {
-  return (
-    error instanceof Error &&
-    (error.message.includes("duplicate column name:") ||
-      error.message.includes("already exists"))
-  );
-}
-
-function applyMigrationContents(db: DatabaseSync, contents: string) {
-  try {
-    db.exec(contents);
-    return;
-  } catch (error) {
-    if (!isIgnorableLegacyMigrationError(error)) {
-      throw error;
-    }
-  }
-
-  for (const statement of splitSqlStatements(contents)) {
-    try {
-      db.exec(`${statement};`);
-    } catch (error) {
-      if (!isIgnorableLegacyMigrationError(error)) {
-        throw error;
-      }
-    }
-  }
-}
-
 export function getMigrationCount(db: DatabaseSync) {
   ensureMigrationTable(db);
 
@@ -122,7 +86,7 @@ export function migrateDatabase(db: DatabaseSync): MigrationStatus {
 
     try {
       db.exec("BEGIN");
-      applyMigrationContents(db, contents);
+      db.exec(contents);
       db.prepare(
         `
           INSERT INTO __app_migrations (name, checksum, applied_at)

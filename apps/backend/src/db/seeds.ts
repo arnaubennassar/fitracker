@@ -522,23 +522,23 @@ function upsertWorkoutFeedback(db: DatabaseSync) {
         id,
         workout_session_id,
         user_id,
-        assignment_id,
-        overall_difficulty,
-        energy_level,
-        soreness_level,
-        satisfaction,
-        notes,
+        mood,
+        difficulty_rating,
+        energy_rating,
+        pain_flag,
+        pain_notes,
+        free_text,
         submitted_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         workout_session_id = excluded.workout_session_id,
-        assignment_id = excluded.assignment_id,
-        overall_difficulty = excluded.overall_difficulty,
-        energy_level = excluded.energy_level,
-        soreness_level = excluded.soreness_level,
-        satisfaction = excluded.satisfaction,
-        notes = excluded.notes,
+        mood = excluded.mood,
+        difficulty_rating = excluded.difficulty_rating,
+        energy_rating = excluded.energy_rating,
+        pain_flag = excluded.pain_flag,
+        pain_notes = excluded.pain_notes,
+        free_text = excluded.free_text,
         submitted_at = excluded.submitted_at
     `,
   );
@@ -548,15 +548,33 @@ function upsertWorkoutFeedback(db: DatabaseSync) {
       feedback.id,
       feedback.workoutSessionId,
       feedback.userId,
-      feedback.assignmentId,
-      feedback.overallDifficulty,
-      feedback.energyLevel,
-      feedback.sorenessLevel,
-      feedback.satisfaction,
-      feedback.notes,
+      feedback.mood,
+      feedback.difficultyRating,
+      feedback.energyRating,
+      Number(feedback.painFlag),
+      feedback.painNotes,
+      feedback.freeText,
       feedback.submittedAt,
     );
   }
+}
+
+function resetSeedData(db: DatabaseSync) {
+  db.exec(`
+    DELETE FROM auth_challenges;
+    DELETE FROM user_sessions;
+    DELETE FROM workout_feedback;
+    DELETE FROM exercise_set_logs;
+    DELETE FROM workout_sessions;
+    DELETE FROM workout_assignments;
+    DELETE FROM workout_template_exercises;
+    DELETE FROM workout_templates;
+    DELETE FROM exercise_media;
+    DELETE FROM exercises;
+    DELETE FROM exercise_categories;
+    DELETE FROM passkey_credentials;
+    DELETE FROM users;
+  `);
 }
 
 function getCount(db: DatabaseSync, tableName: string) {
@@ -573,6 +591,7 @@ export function seedDatabase(db: DatabaseSync, env: AppEnv) {
   db.exec("BEGIN");
 
   try {
+    resetSeedData(db);
     upsertUser(db);
     const adminToken = upsertAdminToken(db, env);
     upsertExerciseCategories(db);

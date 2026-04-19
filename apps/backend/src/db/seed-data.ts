@@ -545,12 +545,12 @@ export const seedWorkoutFeedback: SeedWorkoutFeedback[] = [
     id: "feedback_foundation_a_2026_01_10",
     workoutSessionId: "session_foundation_a_2026_01_10",
     userId: seedUser.id,
-    assignmentId: "assignment_foundation_a",
-    overallDifficulty: 7,
-    energyLevel: 4,
-    sorenessLevel: 2,
-    satisfaction: 5,
-    notes:
+    mood: "steady",
+    difficultyRating: 7,
+    energyRating: 4,
+    painFlag: false,
+    painNotes: null,
+    freeText:
       "Squats felt stable. Push-ups are ready to progress lower next week.",
     submittedAt: seedTimestamps.feedbackSubmittedAt,
   },

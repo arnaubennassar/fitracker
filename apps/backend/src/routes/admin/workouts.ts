@@ -1,5 +1,9 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
+import {
+  getWorkoutTemplateDetail as getWorkoutTemplateDetailRecord,
+  mapWorkoutTemplateRow,
+} from "../../repos/workout-templates.js";
 import { requireAdminAuth } from "../auth.js";
 import type { AppRouteDefinition } from "../registry.js";
 import { buildRouteSchema } from "../registry.js";
@@ -321,19 +325,7 @@ const deleteExerciseSchema = {
 } as const;
 
 function mapTemplate(row: WorkoutTemplateRow) {
-  return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    description: row.description,
-    goal: row.goal,
-    estimatedDurationMin: row.estimated_duration_min,
-    difficulty: row.difficulty,
-    isActive: toBoolean(row.is_active),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    exerciseCount: row.exercise_count ?? 0,
-  };
+  return mapWorkoutTemplateRow(row);
 }
 
 function mapTemplateExercise(row: WorkoutTemplateExerciseRow) {
@@ -368,46 +360,7 @@ function mapTemplateExercise(row: WorkoutTemplateExerciseRow) {
 }
 
 function getWorkoutTemplateDetail(request: FastifyRequest, workoutId: string) {
-  const row = request.server.db
-    .prepare(
-      `
-        SELECT workout_templates.*, COUNT(workout_template_exercises.id) AS exercise_count
-        FROM workout_templates
-        LEFT JOIN workout_template_exercises
-          ON workout_template_exercises.workout_template_id = workout_templates.id
-        WHERE workout_templates.id = ?
-        GROUP BY workout_templates.id
-      `,
-    )
-    .get(workoutId) as WorkoutTemplateRow | undefined;
-
-  if (!row) {
-    return null;
-  }
-
-  const exercises = request.server.db
-    .prepare(
-      `
-        SELECT
-          workout_template_exercises.*,
-          exercises.slug AS exercise_slug,
-          exercises.name AS exercise_name,
-          exercises.tracking_mode,
-          exercises.difficulty,
-          exercises.description
-        FROM workout_template_exercises
-        INNER JOIN exercises
-          ON exercises.id = workout_template_exercises.exercise_id
-        WHERE workout_template_exercises.workout_template_id = ?
-        ORDER BY sequence ASC, id ASC
-      `,
-    )
-    .all(workoutId) as WorkoutTemplateExerciseRow[];
-
-  return {
-    ...mapTemplate(row),
-    exercises: exercises.map(mapTemplateExercise),
-  };
+  return getWorkoutTemplateDetailRecord(request.server.db, workoutId);
 }
 
 function validateExerciseBody(

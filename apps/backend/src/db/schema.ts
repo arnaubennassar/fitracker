@@ -123,13 +123,13 @@ export type SeedExerciseSetLog = {
 };
 
 export type SeedWorkoutFeedback = {
-  assignmentId: string | null;
-  energyLevel: number | null;
+  difficultyRating: number | null;
+  energyRating: number | null;
+  freeText: string | null;
   id: string;
-  notes: string | null;
-  overallDifficulty: number | null;
-  satisfaction: number | null;
-  sorenessLevel: number | null;
+  mood: string | null;
+  painFlag: boolean;
+  painNotes: string | null;
   submittedAt: string;
   userId: string;
   workoutSessionId: string;

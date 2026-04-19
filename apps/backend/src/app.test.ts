@@ -56,7 +56,7 @@ test("GET /health reports a reachable database", async () => {
 
     assert.equal(payload.status, "ok");
     assert.equal(payload.database.reachable, true);
-    assert.equal(payload.database.migrationCount, 4);
+    assert.equal(payload.database.migrationCount, 5);
   } finally {
     await app.close();
     context.cleanup();
@@ -347,11 +347,12 @@ test("admin reporting exposes nested sessions, set logs, feedback, and summary",
     assert.equal(sessionsResponse.statusCode, 200);
     const sessionsPayload = sessionsResponse.json();
     assert.equal(sessionsPayload.summary.completedSessions, 1);
-    assert.equal(sessionsPayload.items[0].setLogs.length > 0, true);
+    assert.equal(sessionsPayload.items[0].sets.length > 0, true);
     assert.equal(
       sessionsPayload.items[0].feedback.id,
       "feedback_foundation_a_2026_01_10",
     );
+    assert.equal(sessionsPayload.items[0].feedback.difficultyRating, 7);
 
     const feedbackResponse = await app.inject({
       method: "GET",
