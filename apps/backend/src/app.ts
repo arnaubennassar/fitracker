@@ -38,6 +38,25 @@ export function buildApp({ env }: BuildAppOptions): FastifyInstance {
   app.decorate("config", env);
   app.decorate("db", db);
 
+  app.setErrorHandler((error, request, reply) => {
+    if ((error as { validation?: unknown }).validation) {
+      return reply.code(400).send({
+        code: "VALIDATION_ERROR",
+        details: (error as { validation: unknown }).validation,
+        error: "Request validation failed.",
+        statusCode: 400,
+      });
+    }
+
+    request.log.error(error);
+
+    return reply.code(500).send({
+      code: "INTERNAL_SERVER_ERROR",
+      error: "Unexpected server error.",
+      statusCode: 500,
+    });
+  });
+
   app.addHook("onClose", async () => {
     db.close();
   });

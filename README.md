@@ -1,6 +1,6 @@
 # Fitracker
 
-Phase 2 backend foundation for a `pnpm` monorepo with a Fastify backend, a Next.js frontend, SQLite persistence, committed migrations, deterministic seed data, and OpenAPI-ready docs.
+Phase 3 backend foundation for a `pnpm` monorepo with a Fastify backend, a Next.js frontend, SQLite persistence, committed migrations, deterministic seed data, and an admin API for catalog, template authoring, assignments, and reporting.
 
 ## Requirements
 
@@ -33,6 +33,18 @@ Example:
 curl -H "Authorization: Bearer $ADMIN_SEED_TOKEN" \
   http://localhost:3001/api/v1/admin/session
 ```
+
+## Phase 3 admin API coverage
+
+Authenticated admin endpoints now cover:
+
+- exercise category CRUD at `/api/v1/admin/categories`
+- exercise CRUD plus nested media at `/api/v1/admin/exercises`
+- workout template CRUD plus ordered template exercises at `/api/v1/admin/workout-templates`
+- assignment CRUD at `/api/v1/admin/assignments`
+- reporting for workout sessions and feedback at `/api/v1/admin/reporting/*`
+
+OpenAPI is generated from the registered route schemas and available at both `/openapi.json` and `/api/v1/openapi.json`.
 
 ## Checks
 

@@ -1,14 +1,22 @@
 import type {
   FastifyInstance,
   HTTPMethods,
-  RouteHandlerMethod,
   preHandlerHookHandler,
 } from "fastify";
 
 type JsonSchema = Record<string, unknown>;
 
+type RouteParameter = {
+  description?: string;
+  in: "path" | "query";
+  name: string;
+  required: boolean;
+  schema: JsonSchema;
+};
+
 export type OpenApiOperation = {
   operationId: string;
+  parameters?: RouteParameter[];
   responses: Record<
     string,
     {
@@ -16,6 +24,10 @@ export type OpenApiOperation = {
       description: string;
     }
   >;
+  requestBody?: {
+    content: Record<string, { schema: JsonSchema }>;
+    required: boolean;
+  };
   security?: Array<{ bearerAuth: string[] }>;
   summary: string;
   tags: string[];
@@ -24,7 +36,7 @@ export type OpenApiOperation = {
 export type OpenApiPathItem = Record<string, OpenApiOperation>;
 
 export type AppRouteDefinition = {
-  handler: RouteHandlerMethod;
+  handler: Parameters<FastifyInstance["route"]>[0]["handler"];
   method: HTTPMethods;
   operationId: string;
   preHandler?: preHandlerHookHandler | preHandlerHookHandler[];
@@ -32,7 +44,11 @@ export type AppRouteDefinition = {
   responseContentType: "application/json" | "text/html";
   responseDescriptions?: Record<number, string>;
   schema: {
+    body?: JsonSchema;
+    params?: JsonSchema;
+    querystring?: JsonSchema;
     response: Record<number, JsonSchema>;
+    responseContentType?: "application/json" | "text/html";
     summary: string;
     tags: string[];
   };
@@ -49,6 +65,9 @@ declare module "fastify" {
 }
 
 type BuildRouteSchemaOptions = {
+  body?: JsonSchema;
+  params?: JsonSchema;
+  querystring?: JsonSchema;
   response: Record<number, JsonSchema>;
   responseContentType?: "application/json" | "text/html";
   summary: string;
@@ -57,6 +76,9 @@ type BuildRouteSchemaOptions = {
 
 export function buildRouteSchema(options: BuildRouteSchemaOptions) {
   return {
+    ...(options.body ? { body: options.body } : {}),
+    ...(options.params ? { params: options.params } : {}),
+    ...(options.querystring ? { querystring: options.querystring } : {}),
     response: options.response,
     summary: options.summary,
     tags: options.tags,
