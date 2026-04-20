@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import React from "react";
 import { useEffect, useState } from "react";
 
 import {
@@ -133,7 +134,9 @@ export default function FeedbackPage() {
               <strong className="metric-value">
                 {workoutSession?.status === "completed" ? "Done" : "Open"}
               </strong>
-              <p className="metric-copy">feedback stays editable until you leave</p>
+              <p className="metric-copy">
+                feedback stays editable until you leave
+              </p>
             </article>
           </div>
         </div>

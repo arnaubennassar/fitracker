@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import { buildAuthSession } from "../../test/fixtures";
 import LoginPage from "./page";
 
 const mocks = vi.hoisted(() => ({
@@ -10,6 +11,14 @@ const mocks = vi.hoisted(() => ({
   completePasskeyLogin: vi.fn(),
   completePasskeyRegistration: vi.fn(),
   replace: vi.fn(),
+  session: null as
+    | ReturnType<typeof buildAuthSession>
+    | {
+        authenticated: false;
+        session: null;
+        user: null;
+      }
+    | null,
   setSession: vi.fn(),
 }));
 
@@ -22,30 +31,16 @@ vi.mock("next/navigation", () => ({
 vi.mock("../providers", () => ({
   useSession: () => ({
     loading: false,
-    session: {
-      authenticated: false,
-      session: null,
-      user: null,
-    },
+    session: mocks.session,
     setSession: mocks.setSession,
   }),
 }));
 
-vi.mock("../_lib/api", () => {
-  class ApiError extends Error {
-    code: string | undefined;
-    statusCode: number;
-
-    constructor(message: string, statusCode: number, code?: string) {
-      super(message);
-      this.code = code;
-      this.name = "ApiError";
-      this.statusCode = statusCode;
-    }
-  }
+vi.mock("../_lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../_lib/api")>();
 
   return {
-    ApiError,
+    ...actual,
     apiFetch: mocks.apiFetch,
   };
 });
@@ -55,6 +50,16 @@ vi.mock("../_lib/webauthn", () => ({
   completePasskeyRegistration: mocks.completePasskeyRegistration,
 }));
 
+async function createApiError(
+  message: string,
+  statusCode: number,
+  code?: string,
+) {
+  const { ApiError } = await import("../_lib/api");
+
+  return new ApiError(message, statusCode, code);
+}
+
 describe("login page", () => {
   beforeEach(() => {
     mocks.apiFetch.mockReset();
@@ -62,6 +67,21 @@ describe("login page", () => {
     mocks.completePasskeyRegistration.mockReset();
     mocks.replace.mockReset();
     mocks.setSession.mockReset();
+    mocks.session = {
+      authenticated: false,
+      session: null,
+      user: null,
+    };
+  });
+
+  test("redirects authenticated athletes back to the dashboard", async () => {
+    mocks.session = buildAuthSession();
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/");
+    });
   });
 
   test("sign-in uses discoverable passkeys when athlete ID is blank", async () => {
@@ -83,19 +103,7 @@ describe("login page", () => {
       credentialId: "cred_1",
       signature: "signature_data",
     };
-    const authSession = {
-      authenticated: true,
-      session: {
-        expiresAt: "2026-04-20T10:00:00.000Z",
-        id: "session_1",
-        lastSeenAt: "2026-04-20T09:00:00.000Z",
-      },
-      user: {
-        displayName: "Arnau",
-        id: "user_arnau",
-        status: "active",
-      },
-    };
+    const authSession = buildAuthSession();
 
     mocks.apiFetch
       .mockResolvedValueOnce(loginOptions)
@@ -157,19 +165,13 @@ describe("login page", () => {
       publicKey: "public_key_data",
       transports: ["internal"],
     };
-    const authSession = {
-      authenticated: true,
-      session: {
-        expiresAt: "2026-04-20T10:00:00.000Z",
-        id: "session_2",
-        lastSeenAt: "2026-04-20T09:00:00.000Z",
-      },
+    const authSession = buildAuthSession({
       user: {
         displayName: "Nina",
         id: "user_nina",
         status: "active",
       },
-    };
+    });
 
     mocks.apiFetch
       .mockResolvedValueOnce(registerOptions)
@@ -213,5 +215,25 @@ describe("login page", () => {
     );
     expect(mocks.setSession).toHaveBeenCalledWith(authSession);
     expect(mocks.replace).toHaveBeenCalledWith("/");
+  });
+
+  test("shows the mapped missing-passkey error message", async () => {
+    const user = userEvent.setup();
+
+    mocks.apiFetch.mockRejectedValueOnce(
+      await createApiError("No passkey", 404, "PASSKEY_NOT_REGISTERED"),
+    );
+
+    render(<LoginPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Sign in with passkey" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "No saved passkey is registered for that athlete yet. Use Create passkey on this device first.",
+      ),
+    ).toBeVisible();
   });
 });

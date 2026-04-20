@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import React from "react";
 import { useEffect, useState } from "react";
 
 import { MediaGallery } from "../../_components/media-gallery";
@@ -65,8 +66,8 @@ export default function WorkoutDetailPage() {
         }
 
         setWorkout(detail);
-        setExpandedExerciseId((current) =>
-          current ?? detail.exercises[0]?.exercise.id ?? null,
+        setExpandedExerciseId(
+          (current) => current ?? detail.exercises[0]?.exercise.id ?? null,
         );
         setAssignment(
           today.items.find(
@@ -160,7 +161,9 @@ export default function WorkoutDetailPage() {
             </article>
             <article className="metric-card">
               <span className="metric-label">Blocks</span>
-              <strong className="metric-value">{workout.exercises.length}</strong>
+              <strong className="metric-value">
+                {workout.exercises.length}
+              </strong>
               <p className="metric-copy">exercise targets</p>
             </article>
             <article className="metric-card">
@@ -257,7 +260,9 @@ export default function WorkoutDetailPage() {
                   <div className="exercise-detail">
                     <div className="meta-chip-row">
                       {exercise.isOptional ? (
-                        <span className="pill neutral-pill">Optional block</span>
+                        <span className="pill neutral-pill">
+                          Optional block
+                        </span>
                       ) : null}
                       {exercise.restSeconds ? (
                         <span className="pill neutral-pill">

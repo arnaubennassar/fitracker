@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import React from "react";
 import { useEffect, useState } from "react";
 
 import { InstallButton } from "./_components/install-button";
@@ -116,7 +117,9 @@ export default function HomePage() {
             <article className="metric-card">
               <span className="metric-label">Recent</span>
               <strong className="metric-value">{recentCompletedCount}</strong>
-              <p className="metric-copy">{recentSetCount} sets across recent logs</p>
+              <p className="metric-copy">
+                {recentSetCount} sets across recent logs
+              </p>
             </article>
           </div>
         </div>
@@ -181,7 +184,8 @@ export default function HomePage() {
                 </span>
               </div>
               <p>
-                {assignment.scheduleNotes ?? assignment.workoutTemplate.description}
+                {assignment.scheduleNotes ??
+                  assignment.workoutTemplate.description}
               </p>
               <div className="meta-chip-row">
                 <span className="status-pill">Assigned today</span>
@@ -192,7 +196,9 @@ export default function HomePage() {
                 ) : null}
               </div>
               <div className="meta-row">
-                <span className="ghost-note">Open the plan and start when ready.</span>
+                <span className="ghost-note">
+                  Open the plan and start when ready.
+                </span>
                 <Link
                   className="primary-button"
                   href={`/workouts/${assignment.workoutTemplate.id}`}
@@ -236,9 +242,7 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="meta-chip-row">
-                <span
-                  className={`status-pill ${workoutSession.status}`}
-                >
+                <span className={`status-pill ${workoutSession.status}`}>
                   {workoutSession.status.replace("_", " ")}
                 </span>
                 <span className="pill neutral-pill">
@@ -250,7 +254,10 @@ export default function HomePage() {
           {recentSessions.length === 0 ? (
             <article className="empty-card">
               <h4>No recent sessions</h4>
-              <p>Your last completed workouts will show up here once you log them.</p>
+              <p>
+                Your last completed workouts will show up here once you log
+                them.
+              </p>
             </article>
           ) : null}
         </div>

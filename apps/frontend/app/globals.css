@@ -39,11 +39,21 @@ html {
 }
 
 body {
-  background:
-    radial-gradient(circle at top left, rgba(77, 226, 255, 0.16), transparent 28%),
-    radial-gradient(circle at top right, rgba(124, 255, 143, 0.16), transparent 24%),
-    radial-gradient(circle at 50% 120%, rgba(124, 255, 143, 0.1), transparent 32%),
-    linear-gradient(180deg, #08101f 0%, var(--bg) 46%, var(--bg-deep) 100%);
+  background: radial-gradient(
+      circle at top left,
+      rgba(77, 226, 255, 0.16),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(124, 255, 143, 0.16),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 50% 120%,
+      rgba(124, 255, 143, 0.1),
+      transparent 32%
+    ), linear-gradient(180deg, #08101f 0%, var(--bg) 46%, var(--bg-deep) 100%);
   color: var(--text);
   font-family: var(--font-body), sans-serif;
   overflow-x: hidden;
@@ -127,7 +137,11 @@ code {
   bottom: 16rem;
   width: 20rem;
   height: 20rem;
-  background: radial-gradient(circle, rgba(124, 255, 143, 0.22), transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(124, 255, 143, 0.22),
+    transparent 72%
+  );
 }
 
 .mobile-shell {
@@ -286,9 +300,11 @@ code {
 .panel {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background:
-    linear-gradient(180deg, rgba(18, 26, 47, 0.88), rgba(8, 12, 26, 0.88)),
-    var(--surface);
+  background: linear-gradient(
+      180deg,
+      rgba(18, 26, 47, 0.88),
+      rgba(8, 12, 26, 0.88)
+    ), var(--surface);
   box-shadow: var(--shadow);
   backdrop-filter: blur(22px);
 }
@@ -314,20 +330,28 @@ code {
   width: 10rem;
   height: 10rem;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(124, 255, 143, 0.12), transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(124, 255, 143, 0.12),
+    transparent 72%
+  );
   pointer-events: none;
 }
 
 .hero-card-spotlight {
-  background:
-    radial-gradient(circle at top right, rgba(77, 226, 255, 0.14), transparent 32%),
-    linear-gradient(145deg, rgba(18, 27, 50, 0.96), rgba(8, 13, 28, 0.9));
+  background: radial-gradient(
+      circle at top right,
+      rgba(77, 226, 255, 0.14),
+      transparent 32%
+    ), linear-gradient(145deg, rgba(18, 27, 50, 0.96), rgba(8, 13, 28, 0.9));
 }
 
 .accent-card {
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.12), transparent 28%),
-    linear-gradient(145deg, rgba(29, 70, 45, 0.92), rgba(10, 19, 18, 0.94));
+  background: radial-gradient(
+      circle at top right,
+      rgba(255, 255, 255, 0.12),
+      transparent 28%
+    ), linear-gradient(145deg, rgba(29, 70, 45, 0.92), rgba(10, 19, 18, 0.94));
 }
 
 .accent-card .section-label,
@@ -591,7 +615,11 @@ code {
 .workout-card,
 .history-card,
 .exercise-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03),
+    rgba(255, 255, 255, 0.015)
+  );
 }
 
 .workout-card-header,
@@ -672,7 +700,11 @@ code {
 }
 
 .chip-button.active {
-  background: linear-gradient(135deg, rgba(124, 255, 143, 0.18), rgba(77, 226, 255, 0.18));
+  background: linear-gradient(
+    135deg,
+    rgba(124, 255, 143, 0.18),
+    rgba(77, 226, 255, 0.18)
+  );
   border-color: rgba(124, 255, 143, 0.28);
   color: var(--text);
 }
@@ -732,7 +764,11 @@ code {
 
 .exercise-nav-row.active {
   border-color: rgba(124, 255, 143, 0.22);
-  background: linear-gradient(135deg, rgba(124, 255, 143, 0.12), rgba(77, 226, 255, 0.1));
+  background: linear-gradient(
+    135deg,
+    rgba(124, 255, 143, 0.12),
+    rgba(77, 226, 255, 0.1)
+  );
 }
 
 .exercise-index {
@@ -820,9 +856,11 @@ code {
 }
 
 .auth-flow-card-accent {
-  background:
-    radial-gradient(circle at top right, rgba(77, 226, 255, 0.1), transparent 28%),
-    rgba(255, 255, 255, 0.04);
+  background: radial-gradient(
+      circle at top right,
+      rgba(77, 226, 255, 0.1),
+      transparent 28%
+    ), rgba(255, 255, 255, 0.04);
 }
 
 .auth-flow-copy {
@@ -874,7 +912,11 @@ code {
 }
 
 .bottom-nav-link.active {
-  background: linear-gradient(135deg, rgba(124, 255, 143, 0.16), rgba(77, 226, 255, 0.18));
+  background: linear-gradient(
+    135deg,
+    rgba(124, 255, 143, 0.16),
+    rgba(77, 226, 255, 0.18)
+  );
   color: var(--text);
   border: 1px solid rgba(124, 255, 143, 0.18);
 }

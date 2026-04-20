@@ -15,7 +15,8 @@ function getRouteMeta(pathname: string) {
     return {
       eyebrow: "Training archive",
       title: "History",
-      subtitle: "Review completed sessions and anything that still needs feedback.",
+      subtitle:
+        "Review completed sessions and anything that still needs feedback.",
     };
   }
 
@@ -54,7 +55,8 @@ function getRouteMeta(pathname: string) {
   return {
     eyebrow: "Daily training",
     title: "Today",
-    subtitle: "Assigned work, active progress, and recent sessions in one clean view.",
+    subtitle:
+      "Assigned work, active progress, and recent sessions in one clean view.",
   };
 }
 

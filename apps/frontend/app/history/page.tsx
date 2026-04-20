@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import React from "react";
 import { useEffect, useState } from "react";
 
 import { ApiError, listWorkoutSessions } from "../_lib/api";
@@ -18,7 +19,8 @@ export default function HistoryPage() {
     (sessionItem) => sessionItem.status === "completed",
   ).length;
   const feedbackPendingCount = sessions.filter(
-    (sessionItem) => sessionItem.status === "completed" && !sessionItem.feedback,
+    (sessionItem) =>
+      sessionItem.status === "completed" && !sessionItem.feedback,
   ).length;
   const totalSetCount = sessions.reduce(
     (total, sessionItem) => total + sessionItem.sets.length,
@@ -91,7 +93,9 @@ export default function HistoryPage() {
             <article className="metric-card">
               <span className="metric-label">Feedback</span>
               <strong className="metric-value">{feedbackPendingCount}</strong>
-              <p className="metric-copy">{totalSetCount} sets captured overall</p>
+              <p className="metric-copy">
+                {totalSetCount} sets captured overall
+              </p>
             </article>
           </div>
         </div>
@@ -150,7 +154,10 @@ export default function HistoryPage() {
           {sessions.length === 0 ? (
             <article className="empty-card">
               <h4>No history yet</h4>
-              <p>As soon as you finish a workout, it will land here with duration and notes.</p>
+              <p>
+                As soon as you finish a workout, it will land here with duration
+                and notes.
+              </p>
             </article>
           ) : null}
         </div>
