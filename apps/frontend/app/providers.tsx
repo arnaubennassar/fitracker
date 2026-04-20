@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -23,26 +24,60 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [sessionState, setSessionState] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const refreshRequestIdRef = useRef(0);
+  const sessionMutationIdRef = useRef(0);
+
+  const setSession = useCallback((nextSession: AuthSession | null) => {
+    sessionMutationIdRef.current += 1;
+    setSessionState(nextSession);
+    setErrorMessage(null);
+    setLoading(false);
+  }, []);
 
   const refreshSession = useCallback(async () => {
+    const requestId = refreshRequestIdRef.current + 1;
+    const sessionMutationIdAtStart = sessionMutationIdRef.current;
+
+    refreshRequestIdRef.current = requestId;
+
     try {
       const nextSession = await getAuthSession();
-      setSession(nextSession);
+
+      if (
+        refreshRequestIdRef.current !== requestId ||
+        sessionMutationIdRef.current !== sessionMutationIdAtStart
+      ) {
+        return null;
+      }
+
+      setSessionState(nextSession);
       setErrorMessage(null);
       return nextSession;
     } catch (error) {
+      if (
+        refreshRequestIdRef.current !== requestId ||
+        sessionMutationIdRef.current !== sessionMutationIdAtStart
+      ) {
+        return null;
+      }
+
       setErrorMessage(
         error instanceof ApiError
           ? error.message
           : "Could not load the session.",
       );
-      setSession(null);
+      setSessionState(null);
       return null;
     } finally {
-      setLoading(false);
+      if (
+        refreshRequestIdRef.current === requestId &&
+        sessionMutationIdRef.current === sessionMutationIdAtStart
+      ) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -65,7 +100,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         errorMessage,
         loading,
         refreshSession,
-        session,
+        session: sessionState,
         setSession,
         signOut,
       }}
