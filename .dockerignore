@@ -2,8 +2,9 @@
 .github
 node_modules
 .pnpm-store
-.next
-dist
-coverage
+apps/backend/dist
+apps/frontend/.next
+apps/*/node_modules
 .env
-
+.env.local
+.env.*.local

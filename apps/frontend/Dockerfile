@@ -9,10 +9,13 @@ WORKDIR /app
 
 FROM base AS build
 
-COPY package.json pnpm-workspace.yaml biome.json tsconfig.base.json ./
+ARG BACKEND_ORIGIN=http://backend:3001
+ENV BACKEND_ORIGIN=$BACKEND_ORIGIN
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml biome.json tsconfig.base.json ./
 COPY apps/frontend/package.json apps/frontend/tsconfig.json apps/frontend/next-env.d.ts apps/frontend/next.config.ts ./apps/frontend/
 
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 COPY apps/frontend ./apps/frontend
 
@@ -21,7 +24,9 @@ RUN pnpm --filter @fitracker/frontend build
 FROM node:22-alpine AS runtime
 
 WORKDIR /app
+ENV HOSTNAME=0.0.0.0
 ENV NODE_ENV=production
+ENV PORT=3000
 
 COPY --from=build /app/apps/frontend/.next/standalone ./
 COPY --from=build /app/apps/frontend/.next/static ./apps/frontend/.next/static

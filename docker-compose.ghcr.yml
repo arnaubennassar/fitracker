@@ -1,0 +1,51 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/arnaubennassar/fitracker-backend:main}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+
+      # Keep SQLite on a named volume so container recreation does not lose data.
+      DATABASE_PATH: /data/app.db
+
+      # Set a long random token before first deploy. This is the seeded admin bearer token.
+      ADMIN_SEED_TOKEN: ${ADMIN_SEED_TOKEN:?set ADMIN_SEED_TOKEN in your shell or .env file}
+      ADMIN_SEED_TOKEN_NAME: ${ADMIN_SEED_TOKEN_NAME:-Arnau Coach Token}
+
+      # These should match the public URL where the frontend is served.
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:3000}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-Fitracker}
+    ports:
+      # Keep this mapped while validating deploys; remove it later if only the frontend should reach the API.
+      - "3001:3001"
+    volumes:
+      - fitracker_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/arnaubennassar/fitracker-frontend:main}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+
+      # The published frontend image is built to proxy to the backend service on the compose network.
+      # Keep the service name as "backend" unless you also rebuild the frontend image.
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Fitracker}
+      NEXT_PUBLIC_API_BASE_URL: /api/v1
+    ports:
+      - "3000:3000"
+
+volumes:
+  fitracker_data:

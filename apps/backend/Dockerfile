@@ -9,15 +9,15 @@ WORKDIR /app
 
 FROM base AS build
 
-COPY package.json pnpm-workspace.yaml biome.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml biome.json tsconfig.base.json ./
 COPY apps/backend/package.json apps/backend/tsconfig.json ./apps/backend/
 
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 COPY apps/backend ./apps/backend
 
 RUN pnpm --filter @fitracker/backend build
-RUN pnpm deploy --filter @fitracker/backend --prod /prod/backend
+RUN pnpm deploy --legacy --filter @fitracker/backend --prod /prod/backend
 
 FROM node:22-alpine AS runtime
 
