@@ -66,3 +66,4 @@ docker compose up --build
 Local SQLite data defaults to `.data/app.db`. In Docker it is mounted at `/data/app.db`.
 
 For published GHCR images and a server-side compose example, see [docs/deploy-ghcr.md](docs/deploy-ghcr.md).
+.
