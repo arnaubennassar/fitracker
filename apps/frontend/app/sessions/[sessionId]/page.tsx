@@ -413,6 +413,10 @@ export default function SessionRunnerPage() {
       ? Math.max(0, Math.ceil((exerciseTimerEndsAt - tick) / 1000))
       : 0;
   const exerciseFinished = isExerciseComplete(currentExercise, session);
+  const exercisesRemaining = Math.max(
+    workout.exercises.length - completedExercises,
+    0,
+  );
 
   return (
     <div className="content-stack">
@@ -425,6 +429,25 @@ export default function SessionRunnerPage() {
           <span className="pill neutral-pill">
             {formatDuration(getSessionElapsedSeconds(session))}
           </span>
+        </div>
+        <div className="metric-grid compact-metric-grid">
+          <article className="metric-card metric-card-muted">
+            <span className="metric-label">Progress</span>
+            <strong className="metric-value">
+              {completedExercises}/{workout.exercises.length}
+            </strong>
+            <p className="metric-copy">exercise blocks done</p>
+          </article>
+          <article className="metric-card metric-card-muted">
+            <span className="metric-label">Current</span>
+            <strong className="metric-value">{currentExerciseIndex + 1}</strong>
+            <p className="metric-copy">{currentExercise.exercise.name}</p>
+          </article>
+          <article className="metric-card metric-card-muted">
+            <span className="metric-label">Remaining</span>
+            <strong className="metric-value">{exercisesRemaining}</strong>
+            <p className="metric-copy">blocks left after this one</p>
+          </article>
         </div>
         <div className="progress-bar" role="presentation">
           <div style={{ width: `${progressPercent}%` }} />
@@ -453,6 +476,23 @@ export default function SessionRunnerPage() {
           </span>
         </div>
         <p className="hero-copy">{describeExerciseTarget(currentExercise)}</p>
+        <div className="meta-chip-row">
+          {currentExercise.restSeconds ? (
+            <span className="pill neutral-pill">
+              {currentExercise.restSeconds}s rest
+            </span>
+          ) : null}
+          {currentExercise.rpeTarget ? (
+            <span className="pill neutral-pill">
+              Target RPE {currentExercise.rpeTarget}
+            </span>
+          ) : null}
+          {currentExercise.rirTarget ? (
+            <span className="pill neutral-pill">
+              {currentExercise.rirTarget} RIR
+            </span>
+          ) : null}
+        </div>
         <p>
           {currentExercise.instructionOverride ?? exerciseDetail?.instructions}
         </p>

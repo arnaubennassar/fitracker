@@ -21,6 +21,15 @@ export default function HomePage() {
     useState<WorkoutSessionDetail | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const authenticated = Boolean(session?.authenticated && session.user);
+  const athleteName = session?.user?.displayName?.split(" ")[0] ?? "Athlete";
+  const assignedCount = today?.items.length ?? 0;
+  const recentCompletedCount = recentSessions.filter(
+    (workoutSession) => workoutSession.status === "completed",
+  ).length;
+  const recentSetCount = recentSessions.reduce(
+    (total, workoutSession) => total + workoutSession.sets.length,
+    0,
+  );
 
   useEffect(() => {
     if (!sessionLoading && !authenticated) {
@@ -76,23 +85,51 @@ export default function HomePage() {
 
   return (
     <div className="content-stack">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">Athlete</p>
-          <h2 className="hero-title">{session?.user?.displayName}</h2>
-          <p className="hero-copy">
-            Assigned work, quick resume, and low-friction logging built for
-            phone use.
-          </p>
+      <section className="hero-card hero-card-spotlight">
+        <div className="hero-grid">
+          <div className="hero-copy-block">
+            <div>
+              <p className="eyebrow">Training dashboard</p>
+              <h2 className="hero-title">Stay sharp, {athleteName}.</h2>
+            </div>
+            <p className="hero-copy">
+              Clean view of today&apos;s training, your active session, and the
+              last few workouts without making the logging flow feel heavy.
+            </p>
+          </div>
+
+          <div className="metric-grid compact-metric-grid">
+            <article className="metric-card">
+              <span className="metric-label">Today</span>
+              <strong className="metric-value">{assignedCount}</strong>
+              <p className="metric-copy">assigned workouts</p>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Status</span>
+              <strong className="metric-value">
+                {activeSession ? "Live" : "Ready"}
+              </strong>
+              <p className="metric-copy">
+                {activeSession ? "session in progress" : "nothing paused"}
+              </p>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Recent</span>
+              <strong className="metric-value">{recentCompletedCount}</strong>
+              <p className="metric-copy">{recentSetCount} sets across recent logs</p>
+            </article>
+          </div>
         </div>
-        <InstallButton />
+        <div className="hero-install-row">
+          <InstallButton />
+        </div>
       </section>
 
       {activeSession ? (
         <section className="panel-card accent-card">
           <div className="panel-row">
             <div>
-              <p className="section-label">Resume now</p>
+              <p className="section-label">Live session</p>
               <h3>{activeSession.workoutTemplate.name}</h3>
               <p>
                 {activeSession.sets.length} sets logged · Started{" "}
@@ -102,15 +139,18 @@ export default function HomePage() {
                 }).format(new Date(activeSession.startedAt))}
               </p>
             </div>
-            <button
-              className="primary-button"
-              onClick={() => {
-                router.push(`/sessions/${activeSession.id}`);
-              }}
-              type="button"
-            >
-              Resume
-            </button>
+            <div className="meta-chip-row">
+              <span className="pill neutral-pill">In progress</span>
+              <button
+                className="primary-button"
+                onClick={() => {
+                  router.push(`/sessions/${activeSession.id}`);
+                }}
+                type="button"
+              >
+                Resume
+              </button>
+            </div>
           </div>
         </section>
       ) : null}
@@ -129,25 +169,35 @@ export default function HomePage() {
         <div className="list-stack">
           {today?.items.map((assignment) => (
             <article className="workout-card" key={assignment.id}>
-              <div>
-                <p className="mini-kicker">
-                  {assignment.workoutTemplate.goal ?? "Workout"}
-                </p>
-                <h4>{assignment.workoutTemplate.name}</h4>
-                <p>
-                  {assignment.scheduleNotes ??
-                    assignment.workoutTemplate.description}
-                </p>
-              </div>
-              <div className="meta-row">
-                <span>
+              <div className="workout-card-header">
+                <div>
+                  <p className="mini-kicker">
+                    {assignment.workoutTemplate.goal ?? "Workout"}
+                  </p>
+                  <h4>{assignment.workoutTemplate.name}</h4>
+                </div>
+                <span className="pill neutral-pill">
                   {assignment.workoutTemplate.estimatedDurationMin ?? "?"} min
                 </span>
+              </div>
+              <p>
+                {assignment.scheduleNotes ?? assignment.workoutTemplate.description}
+              </p>
+              <div className="meta-chip-row">
+                <span className="status-pill">Assigned today</span>
+                {assignment.frequencyPerWeek ? (
+                  <span className="pill neutral-pill">
+                    {assignment.frequencyPerWeek}x / week
+                  </span>
+                ) : null}
+              </div>
+              <div className="meta-row">
+                <span className="ghost-note">Open the plan and start when ready.</span>
                 <Link
                   className="primary-button"
                   href={`/workouts/${assignment.workoutTemplate.id}`}
                 >
-                  Open
+                  Open workout
                 </Link>
               </div>
             </article>
@@ -157,8 +207,8 @@ export default function HomePage() {
             <article className="empty-card">
               <h4>No active assignment today</h4>
               <p>
-                Check with Fitnaista if the next workout has not been assigned
-                yet.
+                The queue is clear for now. Check with your coach if the next
+                block has not landed yet.
               </p>
             </article>
           ) : null}
@@ -185,11 +235,24 @@ export default function HomePage() {
                   {workoutSession.status}
                 </p>
               </div>
-              <span className="pill neutral-pill">
-                {formatDuration(workoutSession.durationSeconds)}
-              </span>
+              <div className="meta-chip-row">
+                <span
+                  className={`status-pill ${workoutSession.status}`}
+                >
+                  {workoutSession.status.replace("_", " ")}
+                </span>
+                <span className="pill neutral-pill">
+                  {formatDuration(workoutSession.durationSeconds)}
+                </span>
+              </div>
             </article>
           ))}
+          {recentSessions.length === 0 ? (
+            <article className="empty-card">
+              <h4>No recent sessions</h4>
+              <p>Your last completed workouts will show up here once you log them.</p>
+            </article>
+          ) : null}
         </div>
       </section>
     </div>

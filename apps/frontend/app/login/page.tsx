@@ -167,13 +167,32 @@ export default function LoginPage() {
 
   return (
     <div className="content-stack">
-      <section className="hero-card">
-        <p className="eyebrow">Passkey</p>
-        <h2 className="hero-title">Make sign-in feel predictable</h2>
-        <p className="hero-copy">
-          Sign in with a passkey that already lives on this device, or create
-          one as a one-time setup step for a specific athlete profile.
-        </p>
+      <section className="hero-card hero-card-spotlight">
+        <div className="hero-grid">
+          <div className="hero-copy-block">
+            <div>
+              <p className="eyebrow">Device-first access</p>
+              <h2 className="hero-title">Strong sessions. Zero passwords.</h2>
+            </div>
+            <p className="hero-copy">
+              Use the passkey already saved on this device, or set one up once
+              for an athlete profile and keep sign-in fast after that.
+            </p>
+          </div>
+
+          <div className="metric-grid">
+            <article className="metric-card">
+              <span className="metric-label">Sign in</span>
+              <strong className="metric-value">1 tap</strong>
+              <p className="metric-copy">when a passkey already exists</p>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Setup</span>
+              <strong className="metric-value">1 time</strong>
+              <p className="metric-copy">per device or browser profile</p>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section className="panel-card">

@@ -65,6 +65,9 @@ export default function WorkoutDetailPage() {
         }
 
         setWorkout(detail);
+        setExpandedExerciseId((current) =>
+          current ?? detail.exercises[0]?.exercise.id ?? null,
+        );
         setAssignment(
           today.items.find(
             (item) => item.workoutTemplate.id === params.workoutId,
@@ -137,17 +140,37 @@ export default function WorkoutDetailPage() {
 
   return (
     <div className="content-stack">
-      <section className="hero-card">
-        <p className="eyebrow">{workout.goal ?? "Assigned workout"}</p>
-        <h2 className="hero-title">{workout.name}</h2>
-        <p className="hero-copy">{workout.description}</p>
-        <div className="meta-chip-row">
-          <span className="pill">
-            {workout.estimatedDurationMin ?? "?"} min
-          </span>
-          <span className="pill neutral-pill">
-            {workout.difficulty ?? "all levels"}
-          </span>
+      <section className="hero-card hero-card-spotlight">
+        <div className="hero-grid">
+          <div className="hero-copy-block">
+            <div>
+              <p className="eyebrow">{workout.goal ?? "Assigned workout"}</p>
+              <h2 className="hero-title">{workout.name}</h2>
+            </div>
+            <p className="hero-copy">{workout.description}</p>
+          </div>
+
+          <div className="metric-grid compact-metric-grid">
+            <article className="metric-card">
+              <span className="metric-label">Length</span>
+              <strong className="metric-value">
+                {workout.estimatedDurationMin ?? "?"}
+              </strong>
+              <p className="metric-copy">minutes planned</p>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Blocks</span>
+              <strong className="metric-value">{workout.exercises.length}</strong>
+              <p className="metric-copy">exercise targets</p>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Level</span>
+              <strong className="metric-value">
+                {workout.difficulty ?? "all"}
+              </strong>
+              <p className="metric-copy">training difficulty</p>
+            </article>
+          </div>
         </div>
         <div className="action-row">
           {activeSession ? (
@@ -213,12 +236,17 @@ export default function WorkoutDetailPage() {
                   }}
                   type="button"
                 >
-                  <div>
-                    <p className="mini-kicker">
-                      {titleCase(exercise.blockLabel)}
-                    </p>
-                    <h4>{exercise.exercise.name}</h4>
-                    <p>{describeExerciseTarget(exercise)}</p>
+                  <div className="workout-card-header">
+                    <span className="exercise-index">
+                      {String(exercise.sequence + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <p className="mini-kicker">
+                        {titleCase(exercise.blockLabel)}
+                      </p>
+                      <h4>{exercise.exercise.name}</h4>
+                      <p>{describeExerciseTarget(exercise)}</p>
+                    </div>
                   </div>
                   <span className="ghost-note">
                     {expanded ? "Hide" : "View"}
@@ -227,6 +255,16 @@ export default function WorkoutDetailPage() {
 
                 {expanded && exerciseDetail ? (
                   <div className="exercise-detail">
+                    <div className="meta-chip-row">
+                      {exercise.isOptional ? (
+                        <span className="pill neutral-pill">Optional block</span>
+                      ) : null}
+                      {exercise.restSeconds ? (
+                        <span className="pill neutral-pill">
+                          {exercise.restSeconds}s rest
+                        </span>
+                      ) : null}
+                    </div>
                     <MediaGallery
                       media={exerciseDetail.media}
                       title={exercise.exercise.name}

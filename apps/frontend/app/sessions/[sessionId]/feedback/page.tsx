@@ -105,17 +105,47 @@ export default function FeedbackPage() {
 
   return (
     <div className="content-stack">
-      <section className="hero-card">
-        <p className="eyebrow">Session feedback</p>
-        <h2 className="hero-title">
-          {workoutSession?.workoutTemplate.name ?? "Workout"}
-        </h2>
-        <p className="hero-copy">
-          Fast notes for the next prescription. Keep it short and real.
-        </p>
+      <section className="hero-card hero-card-spotlight">
+        <div className="hero-grid">
+          <div className="hero-copy-block">
+            <div>
+              <p className="eyebrow">Session feedback</p>
+              <h2 className="hero-title">
+                {workoutSession?.workoutTemplate.name ?? "Workout"}
+              </h2>
+            </div>
+            <p className="hero-copy">
+              Fast notes for the next prescription. Keep it short, specific, and
+              useful.
+            </p>
+          </div>
+
+          <div className="metric-grid">
+            <article className="metric-card">
+              <span className="metric-label">Sets</span>
+              <strong className="metric-value">
+                {workoutSession?.sets.length ?? 0}
+              </strong>
+              <p className="metric-copy">logged in this session</p>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Status</span>
+              <strong className="metric-value">
+                {workoutSession?.status === "completed" ? "Done" : "Open"}
+              </strong>
+              <p className="metric-copy">feedback stays editable until you leave</p>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section className="panel-card">
+        <div className="panel-heading">
+          <div>
+            <p className="section-label">Coach handoff</p>
+            <h3>Session notes</h3>
+          </div>
+        </div>
         <div className="field">
           <span>Mood</span>
           <div className="chip-row">
