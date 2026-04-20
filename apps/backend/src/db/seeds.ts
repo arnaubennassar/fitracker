@@ -8,7 +8,6 @@ import {
   seedExerciseSetLogs,
   seedExercises,
   seedTimestamps,
-  seedUser,
   seedWorkoutAssignments,
   seedWorkoutFeedback,
   seedWorkoutSessions,
@@ -27,25 +26,6 @@ function getTableColumns(db: DatabaseSync, tableName: string) {
         name: string;
       }>
     ).map((column) => column.name),
-  );
-}
-
-function upsertUser(db: DatabaseSync) {
-  db.prepare(
-    `
-      INSERT INTO users (id, display_name, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        display_name = excluded.display_name,
-        status = excluded.status,
-        updated_at = excluded.updated_at
-    `,
-  ).run(
-    seedUser.id,
-    seedUser.displayName,
-    seedUser.status,
-    seedUser.createdAt,
-    seedUser.updatedAt,
   );
 }
 
@@ -362,7 +342,6 @@ function upsertWorkoutAssignments(db: DatabaseSync) {
     `
       INSERT INTO workout_assignments (
         id,
-        user_id,
         workout_template_id,
         assigned_by,
         starts_on,
@@ -373,7 +352,7 @@ function upsertWorkoutAssignments(db: DatabaseSync) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         workout_template_id = excluded.workout_template_id,
         assigned_by = excluded.assigned_by,
@@ -389,7 +368,6 @@ function upsertWorkoutAssignments(db: DatabaseSync) {
   for (const assignment of seedWorkoutAssignments) {
     statement.run(
       assignment.id,
-      assignment.userId,
       assignment.workoutTemplateId,
       assignment.assignedBy,
       assignment.startsOn,
@@ -408,7 +386,6 @@ function upsertWorkoutSessions(db: DatabaseSync) {
     `
       INSERT INTO workout_sessions (
         id,
-        user_id,
         workout_template_id,
         assignment_id,
         status,
@@ -420,7 +397,7 @@ function upsertWorkoutSessions(db: DatabaseSync) {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         workout_template_id = excluded.workout_template_id,
         assignment_id = excluded.assignment_id,
@@ -437,7 +414,6 @@ function upsertWorkoutSessions(db: DatabaseSync) {
   for (const session of seedWorkoutSessions) {
     statement.run(
       session.id,
-      session.userId,
       session.workoutTemplateId,
       session.assignmentId,
       session.status,
@@ -521,7 +497,6 @@ function upsertWorkoutFeedback(db: DatabaseSync) {
       INSERT INTO workout_feedback (
         id,
         workout_session_id,
-        user_id,
         mood,
         difficulty_rating,
         energy_rating,
@@ -530,7 +505,7 @@ function upsertWorkoutFeedback(db: DatabaseSync) {
         free_text,
         submitted_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         workout_session_id = excluded.workout_session_id,
         mood = excluded.mood,
@@ -547,7 +522,6 @@ function upsertWorkoutFeedback(db: DatabaseSync) {
     statement.run(
       feedback.id,
       feedback.workoutSessionId,
-      feedback.userId,
       feedback.mood,
       feedback.difficultyRating,
       feedback.energyRating,
@@ -562,7 +536,7 @@ function upsertWorkoutFeedback(db: DatabaseSync) {
 function resetSeedData(db: DatabaseSync) {
   db.exec(`
     DELETE FROM auth_challenges;
-    DELETE FROM user_sessions;
+    DELETE FROM athlete_sessions;
     DELETE FROM workout_feedback;
     DELETE FROM exercise_set_logs;
     DELETE FROM workout_sessions;
@@ -572,8 +546,7 @@ function resetSeedData(db: DatabaseSync) {
     DELETE FROM exercise_media;
     DELETE FROM exercises;
     DELETE FROM exercise_categories;
-    DELETE FROM passkey_credentials;
-    DELETE FROM users;
+    DELETE FROM athlete_passkey;
   `);
 }
 
@@ -592,7 +565,6 @@ export function seedDatabase(db: DatabaseSync, env: AppEnv) {
 
   try {
     resetSeedData(db);
-    upsertUser(db);
     const adminToken = upsertAdminToken(db, env);
     upsertExerciseCategories(db);
     upsertExercises(db);
@@ -614,11 +586,7 @@ export function seedDatabase(db: DatabaseSync, env: AppEnv) {
         exercises: getCount(db, "exercises"),
         feedback: getCount(db, "workout_feedback"),
         sessions: getCount(db, "workout_sessions"),
-        users: getCount(db, "users"),
         workoutTemplates: getCount(db, "workout_templates"),
-      },
-      user: {
-        id: seedUser.id,
       },
     };
   } catch (error) {

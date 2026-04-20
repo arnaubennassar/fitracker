@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
     | {
         authenticated: false;
         session: null;
-        user: null;
       }
     | null,
 }));

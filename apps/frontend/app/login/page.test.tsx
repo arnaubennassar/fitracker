@@ -10,13 +10,14 @@ const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
   completePasskeyLogin: vi.fn(),
   completePasskeyRegistration: vi.fn(),
+  getPasskeyStatus: vi.fn(),
+  refreshSession: vi.fn(),
   replace: vi.fn(),
   session: null as
     | ReturnType<typeof buildAuthSession>
     | {
         authenticated: false;
         session: null;
-        user: null;
       }
     | null,
   setSession: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("../providers", () => ({
   useSession: () => ({
     loading: false,
+    refreshSession: mocks.refreshSession,
     session: mocks.session,
     setSession: mocks.setSession,
   }),
@@ -42,6 +44,7 @@ vi.mock("../_lib/api", async (importOriginal) => {
   return {
     ...actual,
     apiFetch: mocks.apiFetch,
+    getPasskeyStatus: mocks.getPasskeyStatus,
   };
 });
 
@@ -60,32 +63,27 @@ async function createApiError(
   return new ApiError(message, statusCode, code);
 }
 
-function createDeferredPromise<T>() {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve;
-    reject = promiseReject;
-  });
-
-  return { promise, reject, resolve };
-}
-
 describe("login page", () => {
   beforeEach(() => {
     mocks.apiFetch.mockReset();
     mocks.completePasskeyLogin.mockReset();
     mocks.completePasskeyRegistration.mockReset();
+    mocks.getPasskeyStatus.mockReset();
+    mocks.refreshSession.mockReset();
     mocks.replace.mockReset();
     mocks.setSession.mockReset();
     mocks.session = {
       authenticated: false,
       session: null,
-      user: null,
     };
+    mocks.getPasskeyStatus.mockResolvedValue({
+      authenticated: false,
+      hasPasskey: true,
+    });
+    mocks.refreshSession.mockResolvedValue(null);
   });
 
-  test("redirects authenticated athletes back to the dashboard", async () => {
+  test("redirects authenticated sessions back to the dashboard", async () => {
     mocks.session = buildAuthSession();
 
     render(<LoginPage />);
@@ -95,8 +93,7 @@ describe("login page", () => {
     });
   });
 
-  test("sign-in uses discoverable passkeys when athlete ID is blank", async () => {
-    const user = userEvent.setup();
+  test("bootstraps passkey login when a passkey already exists", async () => {
     const loginOptions = {
       challengeId: "challenge_login",
       publicKey: {
@@ -123,16 +120,16 @@ describe("login page", () => {
 
     render(<LoginPage />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Sign in with passkey" }),
-    );
+    expect(
+      await screen.findByText("Requesting the saved passkey for sign-in..."),
+    ).toBeVisible();
 
     await waitFor(() => {
+      expect(mocks.getPasskeyStatus).toHaveBeenCalled();
       expect(mocks.apiFetch).toHaveBeenNthCalledWith(
         1,
         "/auth/passkey/login/options",
         {
-          bodyJson: {},
           method: "POST",
         },
       );
@@ -151,8 +148,7 @@ describe("login page", () => {
     expect(mocks.replace).toHaveBeenCalledWith("/");
   });
 
-  test("registration trims athlete details before requesting a passkey", async () => {
-    const user = userEvent.setup();
+  test("bootstraps passkey registration when no passkey exists yet", async () => {
     const registerOptions = {
       challengeId: "challenge_register",
       publicKey: {
@@ -163,9 +159,9 @@ describe("login page", () => {
         rp: { id: "localhost", name: "Fitracker Test" },
         timeout: 60000,
         user: {
-          displayName: "Nina",
-          id: "user_nina",
-          name: "user_nina",
+          displayName: "Fitracker athlete",
+          id: "Zml0cmFja2VyLWF0aGxldGU",
+          name: "athlete",
         },
       },
     };
@@ -176,14 +172,12 @@ describe("login page", () => {
       publicKey: "public_key_data",
       transports: ["internal"],
     };
-    const authSession = buildAuthSession({
-      user: {
-        displayName: "Nina",
-        id: "user_nina",
-        status: "active",
-      },
-    });
+    const authSession = buildAuthSession();
 
+    mocks.getPasskeyStatus.mockResolvedValueOnce({
+      authenticated: false,
+      hasPasskey: false,
+    });
     mocks.apiFetch
       .mockResolvedValueOnce(registerOptions)
       .mockResolvedValueOnce(authSession);
@@ -193,21 +187,17 @@ describe("login page", () => {
 
     render(<LoginPage />);
 
-    await user.clear(screen.getByLabelText("Athlete ID"));
-    await user.type(screen.getByLabelText("Athlete ID"), "  user_nina  ");
-    await user.clear(screen.getByLabelText("Display name"));
-    await user.type(screen.getByLabelText("Display name"), "  Nina  ");
-    await user.click(screen.getByRole("button", { name: "Create passkey" }));
+    expect(
+      await screen.findByText(
+        "Creating the first passkey for this app on this device...",
+      ),
+    ).toBeVisible();
 
     await waitFor(() => {
       expect(mocks.apiFetch).toHaveBeenNthCalledWith(
         1,
         "/auth/passkey/register/options",
         {
-          bodyJson: {
-            displayName: "Nina",
-            userId: "user_nina",
-          },
           method: "POST",
         },
       );
@@ -228,90 +218,74 @@ describe("login page", () => {
     expect(mocks.replace).toHaveBeenCalledWith("/");
   });
 
-  test("shows the mapped missing-passkey error message", async () => {
-    const user = userEvent.setup();
+  test("refreshes the full auth session when passkey status says already authenticated", async () => {
+    const authSession = buildAuthSession();
 
-    mocks.apiFetch.mockRejectedValueOnce(
-      await createApiError("No passkey", 404, "PASSKEY_NOT_REGISTERED"),
-    );
-
-    render(<LoginPage />);
-
-    await user.click(
-      screen.getByRole("button", { name: "Sign in with passkey" }),
-    );
-
-    expect(
-      await screen.findByText(
-        "No saved passkey is registered for that athlete yet. Use Create passkey on this device first.",
-      ),
-    ).toBeVisible();
-  });
-
-  test("requires athlete details before creating a passkey", async () => {
-    const user = userEvent.setup();
+    mocks.getPasskeyStatus.mockResolvedValueOnce({
+      authenticated: true,
+      hasPasskey: true,
+    });
+    mocks.refreshSession.mockResolvedValueOnce(authSession);
 
     render(<LoginPage />);
 
-    await user.clear(screen.getByLabelText("Athlete ID"));
-    await user.clear(screen.getByLabelText("Display name"));
-    await user.click(screen.getByRole("button", { name: "Create passkey" }));
+    await waitFor(() => {
+      expect(mocks.refreshSession).toHaveBeenCalledTimes(1);
+      expect(mocks.replace).toHaveBeenCalledWith("/");
+    });
 
-    expect(
-      await screen.findByText(
-        "Athlete ID and display name are required to create a passkey.",
-      ),
-    ).toBeVisible();
     expect(mocks.apiFetch).not.toHaveBeenCalled();
   });
 
-  test("surfaces generic fallback errors during sign-in", async () => {
+  test("shows the mapped bootstrap error and retries", async () => {
     const user = userEvent.setup();
-
-    mocks.apiFetch.mockRejectedValueOnce(
-      new Error("Passkey bridge unavailable."),
+    const missingPasskeyError = await createApiError(
+      "No passkey",
+      404,
+      "PASSKEY_NOT_REGISTERED",
     );
+
+    mocks.getPasskeyStatus
+      .mockRejectedValueOnce(missingPasskeyError)
+      .mockRejectedValueOnce(missingPasskeyError)
+      .mockResolvedValue({
+        authenticated: false,
+        hasPasskey: true,
+      });
+    mocks.apiFetch
+      .mockResolvedValueOnce({
+        challengeId: "challenge_login",
+        publicKey: {
+          allowCredentials: [],
+          challenge: "challenge_data",
+          rpId: "localhost",
+          timeout: 60000,
+          userVerification: "required" as const,
+        },
+      })
+      .mockResolvedValueOnce(buildAuthSession());
+    mocks.completePasskeyLogin.mockResolvedValueOnce({
+      authenticatorData: "auth_data",
+      challengeId: "challenge_login",
+      clientDataJSON: "client_data",
+      credentialId: "cred_1",
+      signature: "signature_data",
+    });
 
     render(<LoginPage />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Sign in with passkey" }),
-    );
-
     expect(
-      await screen.findByText("Passkey bridge unavailable."),
+      await screen.findByText(
+        "No passkey is registered yet on this app. Retry to create one on this device.",
+      ),
     ).toBeVisible();
-  });
 
-  test("disables both auth actions while a passkey request is pending", async () => {
-    const user = userEvent.setup();
-    const pendingLogin = createDeferredPromise<{
-      challengeId: string;
-      publicKey: {
-        allowCredentials: [];
-        challenge: string;
-        rpId: string;
-        timeout: number;
-        userVerification: "required";
-      };
-    }>();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
 
-    mocks.apiFetch.mockReturnValueOnce(pendingLogin.promise);
-
-    render(<LoginPage />);
-
-    await user.click(
-      screen.getByRole("button", { name: "Sign in with passkey" }),
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Waiting for passkey..." }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Create passkey" }),
-    ).toBeDisabled();
-
-    pendingLogin.reject(new Error("Request aborted."));
-    expect(await screen.findByText("Request aborted.")).toBeVisible();
+    await waitFor(() => {
+      expect(mocks.getPasskeyStatus.mock.calls.length).toBeGreaterThanOrEqual(
+        2,
+      );
+    });
   });
 });

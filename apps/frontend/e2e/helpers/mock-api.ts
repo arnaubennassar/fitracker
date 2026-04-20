@@ -23,6 +23,7 @@ type MockApiOptions = {
   exercises?: Record<string, ExerciseDetail>;
   failures?: Partial<
     Record<
+      | "passkeyStatus"
       | "authSession"
       | "createWorkoutSession"
       | "createWorkoutSet"
@@ -37,6 +38,10 @@ type MockApiOptions = {
       }
     >
   >;
+  passkeyStatus?: {
+    authenticated: boolean;
+    hasPasskey: boolean;
+  };
   loginSession?: AuthSession;
   registerSession?: AuthSession;
   sessions?: WorkoutSessionDetail[];
@@ -103,6 +108,12 @@ export async function mockFitrackerApi(
       ...defaultExerciseMap(defaultWorkout),
       ...(options.exercises ?? {}),
     },
+    passkeyStatus: clone(
+      options.passkeyStatus ?? {
+        authenticated: Boolean(options.authSession?.authenticated),
+        hasPasskey: true,
+      },
+    ),
     loginSession: clone(options.loginSession ?? buildAuthSession()),
     registerSession: clone(options.registerSession ?? buildAuthSession()),
     sessions: clone(options.sessions ?? []),
@@ -156,6 +167,14 @@ export async function mockFitrackerApi(
         return json(route, state.authSession);
       }
 
+      if (pathname === "/api/v1/auth/passkey/status" && method === "GET") {
+        if (await fail(route, "passkeyStatus")) {
+          return;
+        }
+
+        return json(route, state.passkeyStatus);
+      }
+
       if (
         pathname === "/api/v1/auth/passkey/login/options" &&
         method === "POST"
@@ -188,11 +207,6 @@ export async function mockFitrackerApi(
         pathname === "/api/v1/auth/passkey/register/options" &&
         method === "POST"
       ) {
-        const payload = request.postDataJSON() as {
-          displayName: string;
-          userId: string;
-        };
-
         return json(route, {
           challengeId: "challenge_register_e2e",
           publicKey: {
@@ -206,9 +220,9 @@ export async function mockFitrackerApi(
             },
             timeout: 60000,
             user: {
-              displayName: payload.displayName,
-              id: "dXNlcl9lMmU",
-              name: payload.userId,
+              displayName: "Fitracker athlete",
+              id: "Zml0cmFja2VyLWF0aGxldGU",
+              name: "athlete",
             },
           },
         });

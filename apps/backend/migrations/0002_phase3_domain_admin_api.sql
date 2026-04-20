@@ -18,7 +18,6 @@ ADD COLUMN rir_target INTEGER;
 
 CREATE TABLE IF NOT EXISTS workout_assignments (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   workout_template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE RESTRICT,
   assigned_by TEXT NOT NULL,
   starts_on TEXT NOT NULL,
@@ -31,48 +30,14 @@ CREATE TABLE IF NOT EXISTS workout_assignments (
   CHECK (frequency_per_week IS NULL OR frequency_per_week >= 1)
 );
 
-CREATE INDEX IF NOT EXISTS workout_assignments_user_idx
-  ON workout_assignments (user_id, is_active, starts_on);
+CREATE INDEX IF NOT EXISTS workout_assignments_active_idx
+  ON workout_assignments (is_active, starts_on);
 
 CREATE INDEX IF NOT EXISTS workout_assignments_template_idx
   ON workout_assignments (workout_template_id);
 
-INSERT INTO workout_assignments (
-  id,
-  user_id,
-  workout_template_id,
-  assigned_by,
-  starts_on,
-  ends_on,
-  schedule_notes,
-  frequency_per_week,
-  is_active,
-  created_at,
-  updated_at
-)
-SELECT
-  legacy.id,
-  legacy.user_id,
-  legacy.workout_template_id,
-  legacy.assigned_by,
-  legacy.starts_on,
-  legacy.ends_on,
-  legacy.schedule_notes,
-  NULL,
-  legacy.is_active,
-  COALESCE(legacy.starts_on || 'T00:00:00.000Z', CURRENT_TIMESTAMP),
-  COALESCE(legacy.starts_on || 'T00:00:00.000Z', CURRENT_TIMESTAMP)
-FROM workout_plan_assignments AS legacy
-WHERE legacy.workout_template_id IS NOT NULL
-  AND NOT EXISTS (
-    SELECT 1
-    FROM workout_assignments AS current
-    WHERE current.id = legacy.id
-  );
-
 CREATE TABLE IF NOT EXISTS workout_sessions (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   workout_template_id TEXT NOT NULL REFERENCES workout_templates(id) ON DELETE RESTRICT,
   assignment_id TEXT REFERENCES workout_assignments(id) ON DELETE SET NULL,
   status TEXT NOT NULL CHECK (status IN ('planned', 'in_progress', 'completed', 'abandoned')),
@@ -86,8 +51,8 @@ CREATE TABLE IF NOT EXISTS workout_sessions (
   CHECK (duration_seconds IS NULL OR duration_seconds >= 0)
 );
 
-CREATE INDEX IF NOT EXISTS workout_sessions_user_idx
-  ON workout_sessions (user_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS workout_sessions_started_idx
+  ON workout_sessions (started_at DESC);
 
 CREATE INDEX IF NOT EXISTS workout_sessions_assignment_idx
   ON workout_sessions (assignment_id, status);
@@ -117,19 +82,16 @@ CREATE INDEX IF NOT EXISTS exercise_set_logs_session_idx
 CREATE TABLE IF NOT EXISTS workout_feedback (
   id TEXT PRIMARY KEY,
   workout_session_id TEXT NOT NULL UNIQUE REFERENCES workout_sessions(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   assignment_id TEXT REFERENCES workout_assignments(id) ON DELETE SET NULL,
-  overall_difficulty INTEGER,
-  energy_level INTEGER,
-  soreness_level INTEGER,
-  satisfaction INTEGER,
-  notes TEXT,
+  mood TEXT,
+  difficulty_rating INTEGER CHECK (difficulty_rating IS NULL OR difficulty_rating BETWEEN 1 AND 10),
+  energy_rating INTEGER CHECK (energy_rating IS NULL OR energy_rating BETWEEN 1 AND 5),
+  pain_flag INTEGER NOT NULL DEFAULT 0 CHECK (pain_flag IN (0, 1)),
+  pain_notes TEXT,
+  free_text TEXT,
   submitted_at TEXT NOT NULL,
-  CHECK (overall_difficulty IS NULL OR overall_difficulty BETWEEN 1 AND 10),
-  CHECK (energy_level IS NULL OR energy_level BETWEEN 1 AND 5),
-  CHECK (soreness_level IS NULL OR soreness_level BETWEEN 1 AND 5),
-  CHECK (satisfaction IS NULL OR satisfaction BETWEEN 1 AND 5)
+  CHECK (assignment_id IS NULL OR assignment_id <> '')
 );
 
-CREATE INDEX IF NOT EXISTS workout_feedback_user_idx
-  ON workout_feedback (user_id, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS workout_feedback_submitted_idx
+  ON workout_feedback (submitted_at DESC);

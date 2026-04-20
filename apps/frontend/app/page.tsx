@@ -21,8 +21,7 @@ export default function HomePage() {
   const [activeSession, setActiveSession] =
     useState<WorkoutSessionDetail | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const authenticated = Boolean(session?.authenticated && session.user);
-  const athleteName = session?.user?.displayName?.split(" ")[0] ?? "Athlete";
+  const authenticated = Boolean(session?.authenticated);
   const assignedCount = today?.items.length ?? 0;
   const recentCompletedCount = recentSessions.filter(
     (workoutSession) => workoutSession.status === "completed",
@@ -91,7 +90,7 @@ export default function HomePage() {
           <div className="hero-copy-block">
             <div>
               <p className="eyebrow">Training dashboard</p>
-              <h2 className="hero-title">Stay sharp, {athleteName}.</h2>
+              <h2 className="hero-title">Stay sharp.</h2>
             </div>
             <p className="hero-copy">
               Clean view of today&apos;s training, your active session, and the

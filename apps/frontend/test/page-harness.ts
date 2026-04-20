@@ -35,7 +35,6 @@ export function setUnauthenticatedSession() {
   sessionHookState.session = {
     authenticated: false,
     session: null,
-    user: null,
   };
 }
 

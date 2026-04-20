@@ -103,16 +103,12 @@ export async function registerPasskeySession(
   app: FastifyInstance,
   options?: {
     credentialId?: string;
-    displayName?: string;
     host?: string;
     origin?: string;
-    userId?: string;
   },
 ) {
   const origin = options?.origin ?? "http://localhost:3000";
   const host = options?.host ?? "localhost:3000";
-  const userId = options?.userId ?? "user_arnau";
-  const displayName = options?.displayName ?? "Arnau";
   const credentialId = options?.credentialId ?? "cred_test_primary";
   const authenticator = createTestAuthenticator();
 
@@ -120,7 +116,6 @@ export async function registerPasskeySession(
     method: "POST",
     url: "/api/v1/auth/passkey/register/options",
     headers: { origin, host },
-    payload: { displayName, userId },
   });
 
   const optionsPayload = registerOptions.json();
@@ -154,6 +149,5 @@ export async function registerPasskeySession(
     registerVerify,
     rpId: "localhost",
     sessionCookie,
-    userId,
   };
 }

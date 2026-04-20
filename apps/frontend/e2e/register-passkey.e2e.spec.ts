@@ -10,23 +10,15 @@ test("creates a passkey and lands on the dashboard", async ({ page }) => {
     authSession: {
       authenticated: false,
       session: null,
-      user: null,
     },
-    registerSession: buildAuthSession({
-      user: {
-        displayName: "Nina",
-        id: "user_nina",
-        status: "active",
-      },
-    }),
+    passkeyStatus: {
+      authenticated: false,
+      hasPasskey: false,
+    },
+    registerSession: buildAuthSession(),
   });
 
   await page.goto("/login");
-  await page
-    .getByRole("textbox", { name: "Athlete ID", exact: true })
-    .fill("user_nina");
-  await page.getByRole("textbox", { name: "Display name" }).fill("Nina");
-  await page.getByRole("button", { name: "Create passkey" }).click();
 
   await expect(page).toHaveURL(/\/$/);
   await expect(

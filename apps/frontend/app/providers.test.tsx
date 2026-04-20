@@ -35,15 +35,15 @@ function SessionConsumer() {
     <div>
       <p>{loading ? "loading" : "ready"}</p>
       <p>{errorMessage ?? "no-error"}</p>
-      <p>{session?.user?.id ?? "no-session"}</p>
+      <p>{session?.session?.id ?? "no-session"}</p>
       <button
         onClick={() => {
           setSession(
             buildAuthSession({
-              user: {
-                displayName: "Manual User",
-                id: "user_manual",
-                status: "active",
+              session: {
+                expiresAt: "2026-04-22T09:00:00.000Z",
+                id: "session_manual",
+                lastSeenAt: "2026-04-20T10:00:00.000Z",
               },
             }),
           );
@@ -112,7 +112,7 @@ describe("app providers", () => {
 
     renderProviders();
 
-    expect(await screen.findByText("user_arnau")).toBeVisible();
+    expect(await screen.findByText("session_cookie")).toBeVisible();
     expect(screen.getByText("ready")).toBeVisible();
     expect(mocks.getAuthSession).toHaveBeenCalledTimes(1);
   });
@@ -140,15 +140,15 @@ describe("app providers", () => {
     renderProviders();
 
     await user.click(screen.getByRole("button", { name: "Set session" }));
-    expect(screen.getByText("user_manual")).toBeVisible();
+    expect(screen.getByText("session_manual")).toBeVisible();
     expect(screen.getByText("ready")).toBeVisible();
 
     pending.resolve(buildAuthSession());
 
     await waitFor(() => {
-      expect(screen.getByText("user_manual")).toBeVisible();
+      expect(screen.getByText("session_manual")).toBeVisible();
     });
-    expect(screen.queryByText("user_arnau")).not.toBeInTheDocument();
+    expect(screen.queryByText("session_cookie")).not.toBeInTheDocument();
   });
 
   test("signOut clears the session after calling logout", async () => {
@@ -159,7 +159,7 @@ describe("app providers", () => {
 
     renderProviders();
 
-    await screen.findByText("user_arnau");
+    await screen.findByText("session_cookie");
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => {

@@ -5,11 +5,11 @@ export type AuthSession = {
     id: string;
     lastSeenAt: string;
   } | null;
-  user: {
-    displayName: string;
-    id: string;
-    status: string;
-  } | null;
+};
+
+export type PasskeyStatus = {
+  authenticated: boolean;
+  hasPasskey: boolean;
 };
 
 export type WorkoutTemplateSummary = {

@@ -524,10 +524,6 @@ const sessionSetParamsSchema = {
   },
 } as const;
 
-function getUserId(request: FastifyRequest) {
-  return request.userSession?.user.id ?? null;
-}
-
 function mapWorkoutTemplate(
   row: NonNullable<ReturnType<typeof getWorkoutTemplateSummary>>,
 ) {
@@ -568,17 +564,19 @@ function mapAssignmentRow(row: AssignmentListRow) {
   };
 }
 
-function listAssignmentsForUser(
+function listAssignments(
   request: FastifyRequest,
-  userId: string,
   options: { activeOnly?: boolean } = {},
 ) {
-  const conditions = ["workout_assignments.user_id = ?"];
-  const params: Array<string | number> = [userId];
+  const conditions: string[] = [];
 
   if (options.activeOnly) {
     conditions.push("workout_assignments.is_active = 1");
   }
+
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(" AND ")}`
+    : "";
 
   const rows = request.server.db
     .prepare(
@@ -602,11 +600,11 @@ function listAssignmentsForUser(
         FROM workout_assignments
         INNER JOIN workout_templates
           ON workout_templates.id = workout_assignments.workout_template_id
-        WHERE ${conditions.join(" AND ")}
+        ${whereClause}
         ORDER BY workout_assignments.starts_on DESC, workout_assignments.created_at DESC
       `,
     )
-    .all(...params) as AssignmentListRow[];
+    .all() as AssignmentListRow[];
 
   return rows.map(mapAssignmentRow);
 }
@@ -660,14 +658,9 @@ function mapFeedback(
   };
 }
 
-function getSessionDetailForUser(
-  request: FastifyRequest,
-  sessionId: string,
-  userId: string,
-) {
+function getSessionDetail(request: FastifyRequest, sessionId: string) {
   const session = getWorkoutSessionDetail(request.server.db, {
     sessionId,
-    userId,
   });
 
   if (!session) {
@@ -688,31 +681,23 @@ function getSessionDetailForUser(
   };
 }
 
-function ensureSessionExists(
-  request: FastifyRequest,
-  sessionId: string,
-  userId: string,
-) {
+function ensureSessionExists(request: FastifyRequest, sessionId: string) {
   return request.server.db
-    .prepare(
-      "SELECT id, status FROM workout_sessions WHERE id = ? AND user_id = ? LIMIT 1",
-    )
-    .get(sessionId, userId) as { id: string; status: string } | undefined;
+    .prepare("SELECT id, status FROM workout_sessions WHERE id = ? LIMIT 1")
+    .get(sessionId) as { id: string; status: string } | undefined;
 }
 
 async function listMyWorkouts(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
-  const items = listAssignmentsForUser(request, userId);
+  if (!request.userSession) return reply;
+  const items = listAssignments(request);
   return { items };
 }
 
 async function getTodayWorkouts(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const query = request.query as { date?: string };
   const today = (query.date ?? new Date().toISOString().slice(0, 10)) as string;
-  const items = listAssignmentsForUser(request, userId, {
+  const items = listAssignments(request, {
     activeOnly: true,
   }).filter((assignment) => {
     const starts = assignment.startsOn;
@@ -729,8 +714,7 @@ async function getMyWorkoutDetail(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { workoutId: string };
   const template = getWorkoutTemplate(request, params.workoutId);
 
@@ -746,17 +730,17 @@ async function getMyWorkoutDetail(
     .prepare(
       `
         SELECT 1 FROM workout_assignments
-        WHERE user_id = ? AND workout_template_id = ?
+        WHERE workout_template_id = ?
         LIMIT 1
       `,
     )
-    .get(userId, params.workoutId) as unknown;
+    .get(params.workoutId) as unknown;
 
   if (!accessRow) {
     return sendNotFound(
       reply,
       "WORKOUT_TEMPLATE_NOT_ASSIGNED",
-      "Workout template is not assigned to the current user.",
+      "Workout template is not assigned.",
     );
   }
 
@@ -780,8 +764,7 @@ async function getMyWorkoutDetail(
 }
 
 async function listMyExercises(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
 
   const rows = request.server.db
     .prepare(
@@ -807,12 +790,11 @@ async function listMyExercises(request: FastifyRequest, reply: FastifyReply) {
           ON workout_template_exercises.exercise_id = exercises.id
         INNER JOIN workout_assignments
           ON workout_assignments.workout_template_id = workout_template_exercises.workout_template_id
-        WHERE workout_assignments.user_id = ?
-          AND exercises.is_active = 1
+        WHERE exercises.is_active = 1
         ORDER BY exercises.name ASC
       `,
     )
-    .all(userId) as ExerciseRow[];
+    .all() as ExerciseRow[];
 
   return { items: rows.map((row) => mapExerciseRow(row)) };
 }
@@ -821,8 +803,7 @@ async function getMyExerciseDetail(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { exerciseId: string };
 
   const row = request.server.db
@@ -840,12 +821,11 @@ async function getMyExerciseDetail(
         INNER JOIN workout_assignments
           ON workout_assignments.workout_template_id = workout_template_exercises.workout_template_id
         WHERE exercises.id = ?
-          AND workout_assignments.user_id = ?
           AND exercises.is_active = 1
         LIMIT 1
       `,
     )
-    .get(params.exerciseId, userId) as ExerciseRow | undefined;
+    .get(params.exerciseId) as ExerciseRow | undefined;
 
   if (!row) {
     return sendNotFound(reply, "EXERCISE_NOT_FOUND", "Exercise not found.");
@@ -864,8 +844,7 @@ async function createMyWorkoutSession(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const body = request.body as {
     assignmentId?: string | null;
     notes?: string | null;
@@ -886,34 +865,31 @@ async function createMyWorkoutSession(
       `
         SELECT id
         FROM workout_assignments
-        WHERE user_id = ?
-          AND workout_template_id = ?
+        WHERE workout_template_id = ?
           AND is_active = 1
         LIMIT 1
       `,
     )
-    .get(userId, body.workoutTemplateId) as { id: string } | undefined;
+    .get(body.workoutTemplateId) as { id: string } | undefined;
 
   if (!assignmentForTemplate) {
     return sendNotFound(
       reply,
       "WORKOUT_TEMPLATE_NOT_ASSIGNED",
-      "Workout template is not assigned to the current user.",
+      "Workout template is not assigned.",
     );
   }
 
   if (body.assignmentId) {
     const assignment = request.server.db
-      .prepare(
-        "SELECT id, user_id FROM workout_assignments WHERE id = ? LIMIT 1",
-      )
-      .get(body.assignmentId) as { id: string; user_id: string } | undefined;
+      .prepare("SELECT id FROM workout_assignments WHERE id = ? LIMIT 1")
+      .get(body.assignmentId) as { id: string } | undefined;
 
-    if (!assignment || assignment.user_id !== userId) {
+    if (!assignment) {
       return sendBadRequest(
         reply,
         "WORKOUT_SESSION_ASSIGNMENT_INVALID",
-        "The supplied assignment does not belong to this user.",
+        "The supplied assignment does not exist.",
       );
     }
   }
@@ -943,7 +919,6 @@ async function createMyWorkoutSession(
       `
         INSERT INTO workout_sessions (
           id,
-          user_id,
           workout_template_id,
           assignment_id,
           status,
@@ -955,12 +930,11 @@ async function createMyWorkoutSession(
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, 'in_progress', ?, NULL, NULL, ?, ?, ?, ?)
+        VALUES (?, ?, ?, 'in_progress', ?, NULL, NULL, ?, ?, ?, ?)
       `,
     )
     .run(
       id,
-      userId,
       templateDetail.id,
       body.assignmentId ?? null,
       now,
@@ -970,18 +944,17 @@ async function createMyWorkoutSession(
       now,
     );
 
-  return reply.code(201).send(getSessionDetailForUser(request, id, userId));
+  return reply.code(201).send(getSessionDetail(request, id));
 }
 
 async function getMyWorkoutSession(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { sessionId: string };
 
-  const detail = getSessionDetailForUser(request, params.sessionId, userId);
+  const detail = getSessionDetail(request, params.sessionId);
 
   if (!detail) {
     return sendNotFound(
@@ -998,8 +971,7 @@ async function listMyWorkoutSessions(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
 
   const query =
     (request.query as
@@ -1010,7 +982,6 @@ async function listMyWorkoutSessions(
         }
       | undefined) ?? {};
   const filters = {
-    userId,
     ...(query.status ? { status: query.status } : {}),
   };
 
@@ -1020,7 +991,7 @@ async function listMyWorkoutSessions(
     limit,
     offset,
   })
-    .map((session) => getSessionDetailForUser(request, session.id, userId))
+    .map((session) => getSessionDetail(request, session.id))
     .filter(Boolean);
   const total = countWorkoutSessions(request.server.db, filters);
 
@@ -1036,8 +1007,7 @@ async function updateMyWorkoutSession(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { sessionId: string };
   const body = request.body as {
     completedAt?: string | null;
@@ -1047,7 +1017,7 @@ async function updateMyWorkoutSession(
     status?: string;
   };
 
-  const existing = ensureSessionExists(request, params.sessionId, userId);
+  const existing = ensureSessionExists(request, params.sessionId);
   if (!existing) {
     return sendNotFound(
       reply,
@@ -1085,19 +1055,18 @@ async function updateMyWorkoutSession(
       `
         UPDATE workout_sessions
         SET ${assignments.join(", ")}
-        WHERE id = ? AND user_id = ?
+        WHERE id = ?
       `,
     )
-    .run(...values, params.sessionId, userId);
+    .run(...values, params.sessionId);
 
-  return getSessionDetailForUser(request, params.sessionId, userId);
+  return getSessionDetail(request, params.sessionId);
 }
 
 async function createSetLog(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { sessionId: string };
-  const existing = ensureSessionExists(request, params.sessionId, userId);
+  const existing = ensureSessionExists(request, params.sessionId);
   if (!existing) {
     return sendNotFound(
       reply,
@@ -1198,10 +1167,9 @@ async function createSetLog(request: FastifyRequest, reply: FastifyReply) {
 }
 
 async function updateSetLog(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { sessionId: string; setId: string };
-  const existing = ensureSessionExists(request, params.sessionId, userId);
+  const existing = ensureSessionExists(request, params.sessionId);
   if (!existing) {
     return sendNotFound(
       reply,
@@ -1323,10 +1291,9 @@ async function updateSetLog(request: FastifyRequest, reply: FastifyReply) {
 }
 
 async function completeMySession(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { sessionId: string };
-  const existing = ensureSessionExists(request, params.sessionId, userId);
+  const existing = ensureSessionExists(request, params.sessionId);
   if (!existing) {
     return sendNotFound(
       reply,
@@ -1355,7 +1322,7 @@ async function completeMySession(request: FastifyRequest, reply: FastifyReply) {
             duration_seconds = COALESCE(?, duration_seconds),
             notes = COALESCE(?, notes),
             updated_at = ?
-        WHERE id = ? AND user_id = ?
+        WHERE id = ?
       `,
     )
     .run(
@@ -1364,17 +1331,15 @@ async function completeMySession(request: FastifyRequest, reply: FastifyReply) {
       body.notes ?? null,
       now,
       params.sessionId,
-      userId,
     );
 
-  return getSessionDetailForUser(request, params.sessionId, userId);
+  return getSessionDetail(request, params.sessionId);
 }
 
 async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
-  const userId = getUserId(request);
-  if (!userId) return reply;
+  if (!request.userSession) return reply;
   const params = request.params as { sessionId: string };
-  const existing = ensureSessionExists(request, params.sessionId, userId);
+  const existing = ensureSessionExists(request, params.sessionId);
   if (!existing) {
     return sendNotFound(
       reply,
@@ -1403,7 +1368,6 @@ async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
         INSERT INTO workout_feedback (
           id,
           workout_session_id,
-          user_id,
           mood,
           difficulty_rating,
           energy_rating,
@@ -1412,7 +1376,7 @@ async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
           free_text,
           submitted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(workout_session_id) DO UPDATE SET
           mood = excluded.mood,
           difficulty_rating = excluded.difficulty_rating,
@@ -1426,7 +1390,6 @@ async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
     .run(
       feedbackId,
       params.sessionId,
-      userId,
       body.mood ?? null,
       body.difficultyRating ?? null,
       body.energyRating ?? null,
@@ -1439,7 +1402,6 @@ async function submitFeedback(request: FastifyRequest, reply: FastifyReply) {
   return mapFeedback(
     getWorkoutSessionDetail(request.server.db, {
       sessionId: params.sessionId,
-      userId,
     })?.feedback ?? null,
   );
 }

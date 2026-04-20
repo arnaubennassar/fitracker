@@ -10,13 +10,15 @@ test("signs in with a passkey and lands on the dashboard", async ({ page }) => {
     authSession: {
       authenticated: false,
       session: null,
-      user: null,
     },
     loginSession: buildAuthSession(),
+    passkeyStatus: {
+      authenticated: false,
+      hasPasskey: true,
+    },
   });
 
   await page.goto("/login");
-  await page.getByRole("button", { name: "Sign in with passkey" }).click();
 
   await expect(page).toHaveURL(/\/$/);
   await expect(

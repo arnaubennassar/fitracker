@@ -13,8 +13,6 @@ type WorkoutSessionRow = {
   template_name: string;
   template_slug: string;
   updated_at: string;
-  user_display_name: string;
-  user_id: string;
   workout_template_id: string;
 };
 
@@ -47,14 +45,12 @@ type WorkoutFeedbackRow = {
   pain_flag: number;
   pain_notes: string | null;
   submitted_at: string;
-  user_id: string;
   workout_session_id: string;
 };
 
 export type WorkoutSessionFilters = {
   sessionId?: string;
   status?: string;
-  userId?: string;
 };
 
 export type WorkoutSessionSummary = {
@@ -68,10 +64,6 @@ export type WorkoutSessionSummary = {
   startedAt: string;
   status: string;
   updatedAt: string;
-  user: {
-    displayName: string;
-    id: string;
-  };
   workoutTemplate: {
     id: string;
     name: string;
@@ -110,7 +102,6 @@ export type WorkoutFeedback = {
   painFlag: boolean;
   painNotes: string | null;
   submittedAt: string;
-  userId: string;
   workoutSessionId: string;
 };
 
@@ -140,11 +131,6 @@ function buildSessionWhereClause(filters: WorkoutSessionFilters) {
     params.push(filters.sessionId);
   }
 
-  if (filters.userId) {
-    conditions.push("workout_sessions.user_id = ?");
-    params.push(filters.userId);
-  }
-
   if (filters.status) {
     conditions.push("workout_sessions.status = ?");
     params.push(filters.status);
@@ -160,11 +146,9 @@ function getSessionBaseQuery() {
   return `
     SELECT
       workout_sessions.*,
-      users.display_name AS user_display_name,
       workout_templates.name AS template_name,
       workout_templates.slug AS template_slug
     FROM workout_sessions
-    INNER JOIN users ON users.id = workout_sessions.user_id
     INNER JOIN workout_templates
       ON workout_templates.id = workout_sessions.workout_template_id
   `;
@@ -182,10 +166,6 @@ function mapWorkoutSessionRow(row: WorkoutSessionRow): WorkoutSessionSummary {
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    user: {
-      id: row.user_id,
-      displayName: row.user_display_name,
-    },
     workoutTemplate: {
       id: row.workout_template_id,
       name: row.template_name,
@@ -230,7 +210,6 @@ export function mapWorkoutFeedbackRow(
   return {
     id: row.id,
     workoutSessionId: row.workout_session_id,
-    userId: row.user_id,
     mood: row.mood,
     difficultyRating: row.difficulty_rating,
     energyRating: row.energy_rating,
@@ -358,38 +337,21 @@ export function getWorkoutSessionDetail(
 
 export function listWorkoutFeedback(
   db: DatabaseSync,
-  filters: { userId?: string },
   pagination: { limit: number; offset: number },
 ) {
-  const conditions: string[] = [];
-  const params: Array<string | number> = [];
-
-  if (filters.userId) {
-    conditions.push("workout_feedback.user_id = ?");
-    params.push(filters.userId);
-  }
-
-  const whereClause = conditions.length
-    ? ` WHERE ${conditions.join(" AND ")}`
-    : "";
   const items = db
     .prepare(
       `
         SELECT *
         FROM workout_feedback
-        ${whereClause}
         ORDER BY submitted_at DESC
         LIMIT ? OFFSET ?
       `,
     )
-    .all(
-      ...params,
-      pagination.limit,
-      pagination.offset,
-    ) as WorkoutFeedbackRow[];
+    .all(pagination.limit, pagination.offset) as WorkoutFeedbackRow[];
   const total = db
-    .prepare(`SELECT COUNT(*) AS count FROM workout_feedback${whereClause}`)
-    .get(...params) as { count: number };
+    .prepare("SELECT COUNT(*) AS count FROM workout_feedback")
+    .get() as { count: number };
 
   return {
     items: items.map((item) => mapWorkoutFeedbackRow(item)).filter(Boolean),

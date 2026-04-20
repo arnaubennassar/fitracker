@@ -64,7 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session, signOut } = useSession();
-  const isAuthed = Boolean(session?.authenticated && session.user);
+  const isAuthed = Boolean(session?.authenticated);
   const meta = getRouteMeta(pathname);
 
   return (
@@ -83,12 +83,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="topbar-actions">
-              {isAuthed && session?.user ? (
-                <div className="user-pill">
-                  <span className="user-dot" />
-                  <span>{session.user.displayName}</span>
-                </div>
-              ) : null}
               {isAuthed ? (
                 <button
                   className="icon-button"

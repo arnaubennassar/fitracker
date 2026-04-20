@@ -19,7 +19,6 @@ try {
         adminTokenPreview: summary.adminToken.preview,
         seededExercises: summary.counts.exercises,
         seededTemplates: summary.counts.workoutTemplates,
-        userId: summary.user.id,
       },
       null,
       2,

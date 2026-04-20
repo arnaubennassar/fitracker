@@ -19,14 +19,6 @@ export const seedTimestamps = {
   secondAssignmentCreatedAt: "2026-02-01T00:00:00.000Z",
 };
 
-export const seedUser = {
-  createdAt: seedTimestamps.createdAt,
-  displayName: "Arnau",
-  id: "user_arnau",
-  status: "active" as const,
-  updatedAt: seedTimestamps.createdAt,
-};
-
 export const seedExerciseCategories: SeedExerciseCategory[] = [
   {
     id: "cat_strength",
@@ -409,7 +401,6 @@ export const seedWorkoutTemplateExercises: SeedWorkoutTemplateExercise[] = [
 export const seedWorkoutAssignments: SeedWorkoutAssignment[] = [
   {
     id: "assignment_foundation_a",
-    userId: seedUser.id,
     workoutTemplateId: "template_foundation_a",
     assignedBy: "fitnaista",
     startsOn: seedTimestamps.assignedOn,
@@ -423,7 +414,6 @@ export const seedWorkoutAssignments: SeedWorkoutAssignment[] = [
   },
   {
     id: "assignment_conditioning_reset",
-    userId: seedUser.id,
     workoutTemplateId: "template_conditioning_reset",
     assignedBy: "fitnaista",
     startsOn: "2026-02-03",
@@ -440,7 +430,6 @@ export const seedWorkoutAssignments: SeedWorkoutAssignment[] = [
 export const seedWorkoutSessions: SeedWorkoutSession[] = [
   {
     id: "session_foundation_a_2026_01_10",
-    userId: seedUser.id,
     workoutTemplateId: "template_foundation_a",
     assignmentId: "assignment_foundation_a",
     status: "completed",
@@ -474,7 +463,6 @@ export const seedWorkoutSessions: SeedWorkoutSession[] = [
   },
   {
     id: "session_conditioning_reset_2026_02_12",
-    userId: seedUser.id,
     workoutTemplateId: "template_conditioning_reset",
     assignmentId: "assignment_conditioning_reset",
     status: "abandoned",
@@ -588,7 +576,6 @@ export const seedWorkoutFeedback: SeedWorkoutFeedback[] = [
   {
     id: "feedback_foundation_a_2026_01_10",
     workoutSessionId: "session_foundation_a_2026_01_10",
-    userId: seedUser.id,
     mood: "steady",
     difficultyRating: 7,
     energyRating: 4,

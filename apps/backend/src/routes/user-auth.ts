@@ -14,11 +14,9 @@ import {
   verifyRegistrationResponse,
 } from "../lib/webauthn.js";
 import {
-  createId,
   dateTimeSchema,
   errorResponseSchema,
   nowIsoString,
-  nullableStringSchema,
   sendBadRequest,
   sendConflict,
   sendNotFound,
@@ -31,46 +29,27 @@ type AuthChallengeRow = {
   challenge: string;
   expires_at: string;
   id: string;
-  metadata: string;
   used_at: string | null;
-  user_id: string | null;
 };
 
 type PasskeyRow = {
   counter: number;
   credential_id: string;
-  display_name: string;
-  id: string;
+  id: number;
   public_key: string;
-  status: string;
   transports: string;
-  user_id: string;
 };
 
-type UserRow = {
-  display_name: string;
-  id: string;
-  status: string;
-};
-
-type ChallengeMetadata = {
-  displayName?: string;
-  userId?: string;
-};
+const SINGLETON_WEBAUTHN_USER_ID = Buffer.from(
+  "fitracker-athlete",
+  "utf8",
+).toString("base64url");
+const SINGLETON_WEBAUTHN_USER_NAME = "athlete";
+const SINGLETON_WEBAUTHN_USER_DISPLAY_NAME = "Fitracker athlete";
 
 const authenticatorTransportSchema = {
   type: "string",
   enum: ["ble", "hybrid", "internal", "nfc", "smart-card", "usb"],
-} as const;
-
-const authUserSchema = {
-  type: "object",
-  required: ["id", "displayName", "status"],
-  properties: {
-    id: { type: "string" },
-    displayName: { type: "string" },
-    status: { type: "string" },
-  },
 } as const;
 
 const authSessionSchema = {
@@ -93,16 +72,6 @@ const publicKeyCredentialDescriptorSchema = {
       type: "array",
       items: authenticatorTransportSchema,
     },
-  },
-} as const;
-
-const registerOptionsBodySchema = {
-  type: "object",
-  required: ["userId", "displayName"],
-  additionalProperties: false,
-  properties: {
-    userId: { type: "string", minLength: 1, maxLength: 120 },
-    displayName: { type: "string", minLength: 1, maxLength: 120 },
   },
 } as const;
 
@@ -187,14 +156,6 @@ const registerVerifyBodySchema = {
   },
 } as const;
 
-const loginOptionsBodySchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    userId: { type: "string", minLength: 1, maxLength: 120 },
-  },
-} as const;
-
 const loginOptionsResponseSchema = {
   type: "object",
   required: ["challengeId", "publicKey"],
@@ -244,15 +205,21 @@ const loginVerifyBodySchema = {
 
 const authSessionResponseSchema = {
   type: "object",
-  required: ["authenticated", "session", "user"],
+  required: ["authenticated", "session"],
   properties: {
     authenticated: { type: "boolean" },
-    user: {
-      anyOf: [authUserSchema, { type: "null" }],
-    },
     session: {
       anyOf: [authSessionSchema, { type: "null" }],
     },
+  },
+} as const;
+
+const passkeyStatusResponseSchema = {
+  type: "object",
+  required: ["authenticated", "hasPasskey"],
+  properties: {
+    authenticated: { type: "boolean" },
+    hasPasskey: { type: "boolean" },
   },
 } as const;
 
@@ -275,45 +242,25 @@ function cleanupExpiredChallenges(request: FastifyRequest) {
     .run(nowIsoString());
 }
 
-function getActiveUser(request: FastifyRequest, userId: string) {
+function getStoredPasskey(request: FastifyRequest) {
   return request.server.db
     .prepare(
       `
-        SELECT id, display_name, status
-        FROM users
-        WHERE id = ?
+        SELECT id, credential_id, public_key, counter, transports
+        FROM athlete_passkey
         LIMIT 1
       `,
     )
-    .get(userId) as UserRow | undefined;
-}
-
-function getPasskeysForUser(request: FastifyRequest, userId: string) {
-  return request.server.db
-    .prepare(
-      `
-        SELECT credential_id, transports
-        FROM passkey_credentials
-        WHERE user_id = ?
-        ORDER BY created_at ASC, id ASC
-      `,
-    )
-    .all(userId) as Array<{
-    credential_id: string;
-    transports: string;
-  }>;
+    .get() as PasskeyRow | undefined;
 }
 
 function createStoredChallenge(
   request: FastifyRequest,
-  options: {
-    flowType: "passkey_login" | "passkey_register";
-    metadata?: Record<string, unknown>;
-  },
+  flowType: "passkey_login" | "passkey_register",
 ) {
   cleanupExpiredChallenges(request);
 
-  const id = createId("authchallenge");
+  const id = `authchallenge_${crypto.randomUUID().replaceAll("-", "")}`;
   const challenge = createChallenge();
   const now = new Date();
   const expiresAt = new Date(
@@ -325,28 +272,18 @@ function createStoredChallenge(
       `
         INSERT INTO auth_challenges (
           id,
-          user_id,
           flow_type,
           challenge,
-          metadata,
           created_at,
           expires_at,
           used_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+        VALUES (?, ?, ?, ?, ?, NULL)
       `,
     )
-    .run(
-      id,
-      null,
-      options.flowType,
-      challenge,
-      JSON.stringify(options.metadata ?? {}),
-      now.toISOString(),
-      expiresAt.toISOString(),
-    );
+    .run(id, flowType, challenge, now.toISOString(), expiresAt.toISOString());
 
-  return { challenge, challengeId: id, expiresAt: expiresAt.toISOString() };
+  return { challenge, challengeId: id };
 }
 
 function getUnusedChallenge(
@@ -357,7 +294,7 @@ function getUnusedChallenge(
   const row = request.server.db
     .prepare(
       `
-        SELECT id, user_id, challenge, metadata, expires_at, used_at
+        SELECT id, challenge, expires_at, used_at
         FROM auth_challenges
         WHERE id = ? AND flow_type = ?
         LIMIT 1
@@ -384,31 +321,14 @@ function markChallengeUsed(request: FastifyRequest, challengeId: string) {
     .run(nowIsoString(), challengeId);
 }
 
-function toAuthDescriptor(row: {
-  credential_id: string;
-  transports: string;
-}) {
+function toAuthDescriptor(
+  row: Pick<PasskeyRow, "credential_id" | "transports">,
+) {
   return {
     id: row.credential_id,
     type: "public-key" as const,
     transports: JSON.parse(row.transports) as string[],
   };
-}
-
-function readChallengeMetadata(
-  challenge: Pick<AuthChallengeRow, "metadata">,
-): ChallengeMetadata {
-  try {
-    const parsed = JSON.parse(challenge.metadata) as ChallengeMetadata | null;
-
-    if (!parsed || typeof parsed !== "object") {
-      return {};
-    }
-
-    return parsed;
-  } catch {
-    return {};
-  }
 }
 
 function mapAuthResponse(request: FastifyRequest) {
@@ -418,7 +338,6 @@ function mapAuthResponse(request: FastifyRequest) {
     return {
       authenticated: false,
       session: null,
-      user: null,
     };
   }
 
@@ -429,11 +348,13 @@ function mapAuthResponse(request: FastifyRequest) {
       id: session.id,
       lastSeenAt: session.lastSeenAt,
     },
-    user: {
-      displayName: session.user.displayName,
-      id: session.user.id,
-      status: session.user.status,
-    },
+  };
+}
+
+async function getPasskeyStatus(request: FastifyRequest) {
+  return {
+    authenticated: Boolean(resolveUserSession(request)),
+    hasPasskey: Boolean(getStoredPasskey(request)),
   };
 }
 
@@ -441,28 +362,15 @@ async function createRegisterOptions(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const body = request.body as {
-    displayName: string;
-    userId: string;
-  };
-  const existingUser = getActiveUser(request, body.userId);
-
-  if (existingUser && existingUser.status !== "active") {
+  if (getStoredPasskey(request)) {
     return sendConflict(
       reply,
-      "USER_ACCOUNT_INACTIVE",
-      "This user account is inactive.",
+      "PASSKEY_ALREADY_REGISTERED",
+      "A passkey is already registered.",
     );
   }
 
-  const challenge = createStoredChallenge(request, {
-    flowType: "passkey_register",
-    metadata: {
-      displayName: body.displayName,
-      userId: body.userId,
-    },
-  });
-  const passkeys = getPasskeysForUser(request, body.userId);
+  const challenge = createStoredChallenge(request, "passkey_register");
 
   return {
     challengeId: challenge.challengeId,
@@ -473,7 +381,7 @@ async function createRegisterOptions(
         userVerification: "preferred",
       },
       challenge: challenge.challenge,
-      excludeCredentials: passkeys.map(toAuthDescriptor),
+      excludeCredentials: [],
       pubKeyCredParams: [{ alg: -7, type: "public-key" }],
       rp: {
         id: getRpId(request),
@@ -481,15 +389,23 @@ async function createRegisterOptions(
       },
       timeout: request.server.config.AUTH_CHALLENGE_TTL_SECONDS * 1000,
       user: {
-        displayName: body.displayName,
-        id: body.userId,
-        name: body.userId,
+        displayName: SINGLETON_WEBAUTHN_USER_DISPLAY_NAME,
+        id: SINGLETON_WEBAUTHN_USER_ID,
+        name: SINGLETON_WEBAUTHN_USER_NAME,
       },
     },
   };
 }
 
 async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
+  if (getStoredPasskey(request)) {
+    return sendConflict(
+      reply,
+      "PASSKEY_ALREADY_REGISTERED",
+      "A passkey is already registered.",
+    );
+  }
+
   const body = request.body as {
     challengeId: string;
     clientDataJSON: string;
@@ -525,47 +441,14 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
     );
   }
 
-  const metadata = readChallengeMetadata(challenge);
-  const targetUserId = metadata.userId ?? challenge.user_id;
-
-  if (!targetUserId) {
-    return sendBadRequest(
-      reply,
-      "PASSKEY_REGISTER_CHALLENGE_INVALID",
-      "The registration challenge is invalid or expired.",
-    );
-  }
-
   const now = nowIsoString();
-  const existingUser = getActiveUser(request, targetUserId);
-
-  if (existingUser && existingUser.status !== "active") {
-    return sendConflict(
-      reply,
-      "USER_ACCOUNT_INACTIVE",
-      "This user account is inactive.",
-    );
-  }
-
-  request.server.db
-    .prepare(
-      `
-        INSERT INTO users (id, display_name, status, created_at, updated_at)
-        VALUES (?, ?, 'active', ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          display_name = excluded.display_name,
-          updated_at = excluded.updated_at
-      `,
-    )
-    .run(targetUserId, metadata.displayName ?? targetUserId, now, now);
 
   try {
     request.server.db
       .prepare(
         `
-          INSERT INTO passkey_credentials (
+          INSERT INTO athlete_passkey (
             id,
-            user_id,
             credential_id,
             public_key,
             counter,
@@ -573,12 +456,10 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
             created_at,
             last_used_at
           )
-          VALUES (?, ?, ?, ?, 0, ?, ?, NULL)
+          VALUES (1, ?, ?, 0, ?, ?, NULL)
         `,
       )
       .run(
-        createId("passkey"),
-        targetUserId,
         body.credentialId,
         body.publicKey,
         JSON.stringify(body.transports ?? []),
@@ -592,7 +473,7 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
       return sendConflict(
         reply,
         "PASSKEY_ALREADY_REGISTERED",
-        "This passkey is already registered.",
+        "A passkey is already registered.",
       );
     }
 
@@ -601,8 +482,7 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
 
   markChallengeUsed(request, challenge.id);
 
-  const session = createUserSession(request, reply, targetUserId);
-  const user = getActiveUser(request, targetUserId);
+  const session = createUserSession(request, reply);
 
   return {
     authenticated: true,
@@ -611,11 +491,6 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
       id: session.id,
       lastSeenAt: now,
     },
-    user: {
-      displayName: user?.display_name ?? metadata.displayName ?? targetUserId,
-      id: targetUserId,
-      status: "active",
-    },
   };
 }
 
@@ -623,47 +498,22 @@ async function createLoginOptions(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
-  const body = (request.body as { userId?: string } | undefined) ?? {};
-  let allowCredentials: Array<{
-    credential_id: string;
-    transports: string;
-  }> = [];
+  const passkey = getStoredPasskey(request);
 
-  if (body.userId) {
-    const user = getActiveUser(request, body.userId);
-
-    if (!user) {
-      return sendNotFound(reply, "USER_NOT_FOUND", "User not found.");
-    }
-
-    if (user.status !== "active") {
-      return sendConflict(
-        reply,
-        "USER_ACCOUNT_INACTIVE",
-        "This user account is inactive.",
-      );
-    }
-
-    allowCredentials = getPasskeysForUser(request, body.userId);
-
-    if (allowCredentials.length === 0) {
-      return sendNotFound(
-        reply,
-        "PASSKEY_NOT_REGISTERED",
-        "This user does not have a registered passkey.",
-      );
-    }
+  if (!passkey) {
+    return sendNotFound(
+      reply,
+      "PASSKEY_NOT_REGISTERED",
+      "No registered passkey exists yet.",
+    );
   }
 
-  const challenge = createStoredChallenge(request, {
-    flowType: "passkey_login",
-    metadata: body.userId ? { userId: body.userId } : {},
-  });
+  const challenge = createStoredChallenge(request, "passkey_login");
 
   return {
     challengeId: challenge.challengeId,
     publicKey: {
-      allowCredentials: allowCredentials.map(toAuthDescriptor),
+      allowCredentials: [toAuthDescriptor(passkey)],
       challenge: challenge.challenge,
       rpId: getRpId(request),
       timeout: request.server.config.AUTH_CHALLENGE_TTL_SECONDS * 1000,
@@ -694,42 +544,13 @@ async function verifyLogin(request: FastifyRequest, reply: FastifyReply) {
     );
   }
 
-  const passkey = request.server.db
-    .prepare(
-      `
-        SELECT
-          passkey_credentials.id,
-          passkey_credentials.user_id,
-          passkey_credentials.credential_id,
-          passkey_credentials.public_key,
-          passkey_credentials.counter,
-          passkey_credentials.transports,
-          users.display_name,
-          users.status
-        FROM passkey_credentials
-        INNER JOIN users ON users.id = passkey_credentials.user_id
-        WHERE passkey_credentials.credential_id = ?
-        LIMIT 1
-      `,
-    )
-    .get(body.credentialId) as PasskeyRow | undefined;
+  const passkey = getStoredPasskey(request);
 
-  if (!passkey || passkey.status !== "active") {
+  if (!passkey || passkey.credential_id !== body.credentialId) {
     return sendBadRequest(
       reply,
       "PASSKEY_LOGIN_CREDENTIAL_INVALID",
       "The supplied passkey could not be verified.",
-    );
-  }
-
-  const metadata = readChallengeMetadata(challenge);
-  const requestedUserId = metadata.userId ?? challenge.user_id;
-
-  if (requestedUserId && requestedUserId !== passkey.user_id) {
-    return sendBadRequest(
-      reply,
-      "PASSKEY_LOGIN_CREDENTIAL_MISMATCH",
-      "The supplied passkey does not belong to the requested user.",
     );
   }
 
@@ -749,16 +570,16 @@ async function verifyLogin(request: FastifyRequest, reply: FastifyReply) {
     request.server.db
       .prepare(
         `
-          UPDATE passkey_credentials
+          UPDATE athlete_passkey
           SET counter = ?, last_used_at = ?
-          WHERE id = ?
+          WHERE id = 1
         `,
       )
-      .run(verified.counter, now, passkey.id);
+      .run(verified.counter, now);
 
     markChallengeUsed(request, challenge.id);
 
-    const session = createUserSession(request, reply, passkey.user_id);
+    const session = createUserSession(request, reply);
 
     return {
       authenticated: true,
@@ -766,11 +587,6 @@ async function verifyLogin(request: FastifyRequest, reply: FastifyReply) {
         expiresAt: session.expiresAt,
         id: session.id,
         lastSeenAt: now,
-      },
-      user: {
-        displayName: passkey.display_name,
-        id: passkey.user_id,
-        status: passkey.status,
       },
     };
   } catch (error) {
@@ -800,24 +616,40 @@ export function userAuthRoutes({
 }: UserRouteOptions): AppRouteDefinition[] {
   return [
     {
+      method: "GET",
+      operationId: "getPasskeyStatus",
+      responseContentType: "application/json",
+      response: {
+        200: passkeyStatusResponseSchema,
+      },
+      summary: "Get singleton passkey bootstrap status.",
+      tags: ["user-auth"],
+      url: `${apiBasePath}/auth/passkey/status`,
+      schema: buildRouteSchema({
+        tags: ["user-auth"],
+        summary: "Get singleton passkey bootstrap status.",
+        response: {
+          200: passkeyStatusResponseSchema,
+        },
+      }),
+      handler: getPasskeyStatus,
+    },
+    {
       method: "POST",
       operationId: "createPasskeyRegisterOptions",
       responseContentType: "application/json",
       response: {
         200: registerOptionsResponseSchema,
-        400: errorResponseSchema,
         409: errorResponseSchema,
       },
-      summary: "Create passkey registration options for a user.",
+      summary: "Create singleton passkey registration options.",
       tags: ["user-auth"],
       url: `${apiBasePath}/auth/passkey/register/options`,
       schema: buildRouteSchema({
-        body: registerOptionsBodySchema,
         tags: ["user-auth"],
-        summary: "Create passkey registration options for a user.",
+        summary: "Create singleton passkey registration options.",
         response: {
           200: registerOptionsResponseSchema,
-          400: errorResponseSchema,
           409: errorResponseSchema,
         },
       }),
@@ -832,13 +664,13 @@ export function userAuthRoutes({
         400: errorResponseSchema,
         409: errorResponseSchema,
       },
-      summary: "Verify a passkey registration and create a session.",
+      summary: "Verify singleton passkey registration and create a session.",
       tags: ["user-auth"],
       url: `${apiBasePath}/auth/passkey/register/verify`,
       schema: buildRouteSchema({
         body: registerVerifyBodySchema,
         tags: ["user-auth"],
-        summary: "Verify a passkey registration and create a session.",
+        summary: "Verify singleton passkey registration and create a session.",
         response: {
           200: authSessionResponseSchema,
           400: errorResponseSchema,
@@ -854,19 +686,16 @@ export function userAuthRoutes({
       response: {
         200: loginOptionsResponseSchema,
         404: errorResponseSchema,
-        409: errorResponseSchema,
       },
-      summary: "Create passkey authentication options.",
+      summary: "Create singleton passkey authentication options.",
       tags: ["user-auth"],
       url: `${apiBasePath}/auth/passkey/login/options`,
       schema: buildRouteSchema({
-        body: loginOptionsBodySchema,
         tags: ["user-auth"],
-        summary: "Create passkey authentication options.",
+        summary: "Create singleton passkey authentication options.",
         response: {
           200: loginOptionsResponseSchema,
           404: errorResponseSchema,
-          409: errorResponseSchema,
         },
       }),
       handler: createLoginOptions,
@@ -879,13 +708,13 @@ export function userAuthRoutes({
         200: authSessionResponseSchema,
         400: errorResponseSchema,
       },
-      summary: "Verify a passkey assertion and create a session.",
+      summary: "Verify singleton passkey login and create a session.",
       tags: ["user-auth"],
       url: `${apiBasePath}/auth/passkey/login/verify`,
       schema: buildRouteSchema({
         body: loginVerifyBodySchema,
         tags: ["user-auth"],
-        summary: "Verify a passkey assertion and create a session.",
+        summary: "Verify singleton passkey login and create a session.",
         response: {
           200: authSessionResponseSchema,
           400: errorResponseSchema,
@@ -894,42 +723,42 @@ export function userAuthRoutes({
       handler: verifyLogin,
     },
     {
-      method: "POST",
-      operationId: "logoutUser",
-      responseContentType: "application/json",
-      response: {
-        200: logoutResponseSchema,
-      },
-      summary: "Revoke the active user session cookie if present.",
-      tags: ["user-auth"],
-      url: `${apiBasePath}/auth/logout`,
-      schema: buildRouteSchema({
-        tags: ["user-auth"],
-        summary: "Revoke the active user session cookie if present.",
-        response: {
-          200: logoutResponseSchema,
-        },
-      }),
-      handler: logout,
-    },
-    {
       method: "GET",
-      operationId: "getUserSession",
+      operationId: "getAuthSession",
       responseContentType: "application/json",
       response: {
         200: authSessionResponseSchema,
       },
-      summary: "Inspect the current user session.",
+      summary: "Get the current singleton authentication session.",
       tags: ["user-auth"],
       url: `${apiBasePath}/auth/me`,
       schema: buildRouteSchema({
         tags: ["user-auth"],
-        summary: "Inspect the current user session.",
+        summary: "Get the current singleton authentication session.",
         response: {
           200: authSessionResponseSchema,
         },
       }),
       handler: getAuthSession,
+    },
+    {
+      method: "POST",
+      operationId: "logout",
+      responseContentType: "application/json",
+      response: {
+        200: logoutResponseSchema,
+      },
+      summary: "Revoke the current singleton session.",
+      tags: ["user-auth"],
+      url: `${apiBasePath}/auth/logout`,
+      schema: buildRouteSchema({
+        tags: ["user-auth"],
+        summary: "Revoke the current singleton session.",
+        response: {
+          200: logoutResponseSchema,
+        },
+      }),
+      handler: logout,
     },
   ];
 }

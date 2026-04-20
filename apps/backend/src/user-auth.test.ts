@@ -68,7 +68,7 @@ test("auth me reports unauthenticated after logout revokes the session", async (
       .prepare(
         `
           SELECT revoked_at
-          FROM user_sessions
+          FROM athlete_sessions
           WHERE id = ?
           LIMIT 1
         `,
@@ -98,7 +98,6 @@ test("passkey login challenges cannot be reused after a successful login", async
       method: "POST",
       url: "/api/v1/auth/passkey/login/options",
       headers: { origin: registration.origin, host: registration.host },
-      payload: { userId: registration.userId },
     });
 
     assert.equal(loginOptions.statusCode, 200);
@@ -176,10 +175,6 @@ test("passkey registration rejects duplicate credentials and invalid challenges"
       method: "POST",
       url: "/api/v1/auth/passkey/register/options",
       headers: { origin: registration.origin, host: registration.host },
-      payload: {
-        displayName: "Arnau",
-        userId: "user_arnau",
-      },
     });
     const duplicateVerify = await app.inject({
       method: "POST",
@@ -239,7 +234,6 @@ test("passkey verification fails on origin mismatch and invalid signatures", asy
       method: "POST",
       url: "/api/v1/auth/passkey/register/options",
       headers: { origin: "http://localhost:3000", host: "localhost:3000" },
-      payload: { displayName: "Arnau", userId: "user_arnau" },
     });
     const authenticator = createTestAuthenticator();
 
@@ -272,7 +266,6 @@ test("passkey verification fails on origin mismatch and invalid signatures", asy
       method: "POST",
       url: "/api/v1/auth/passkey/login/options",
       headers: { origin: registration.origin, host: registration.host },
-      payload: { userId: registration.userId },
     });
     const authenticatorData = buildAuthenticatorData(registration.rpId, 1);
     const clientDataJSON = encodeClientDataJSON({

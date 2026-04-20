@@ -1,14 +1,5 @@
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  display_name TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS passkey_credentials (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS athlete_passkey (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
   credential_id TEXT NOT NULL UNIQUE,
   public_key TEXT NOT NULL,
   counter INTEGER NOT NULL DEFAULT 0,
@@ -95,24 +86,3 @@ CREATE TABLE IF NOT EXISTS workout_template_exercises (
 
 CREATE UNIQUE INDEX IF NOT EXISTS workout_template_exercises_sequence_idx
   ON workout_template_exercises (workout_template_id, sequence);
-
-CREATE TABLE IF NOT EXISTS workout_plans (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS workout_plan_assignments (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  workout_plan_id TEXT REFERENCES workout_plans(id) ON DELETE SET NULL,
-  workout_template_id TEXT REFERENCES workout_templates(id) ON DELETE SET NULL,
-  assigned_by TEXT NOT NULL,
-  starts_on TEXT NOT NULL,
-  ends_on TEXT,
-  schedule_notes TEXT,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  CHECK (workout_plan_id IS NOT NULL OR workout_template_id IS NOT NULL)
-);

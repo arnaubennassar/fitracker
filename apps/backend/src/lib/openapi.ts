@@ -119,7 +119,7 @@ export function buildOpenApiDocument(app: FastifyInstance) {
       },
       {
         name: "admin-assignments",
-        description: "Workout template assignments for users.",
+        description: "Workout template assignments for the singleton athlete.",
       },
       {
         name: "admin-reporting",
@@ -129,7 +129,7 @@ export function buildOpenApiDocument(app: FastifyInstance) {
       {
         name: "user-auth",
         description:
-          "Athlete passkey registration, passkey login, and session inspection.",
+          "Singleton athlete passkey bootstrap, passkey login, and session inspection.",
       },
       {
         name: "user-workouts",

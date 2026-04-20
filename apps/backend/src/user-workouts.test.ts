@@ -24,45 +24,12 @@ test("user workout routes reject invalid assignment ids and missing session reso
       cookie: `fitracker_session=${registration.sessionCookie}`,
     };
 
-    app.db
-      .prepare(
-        `
-          INSERT INTO users (id, display_name, status, created_at, updated_at)
-          VALUES ('user_other', 'Other User', 'active', ?, ?)
-        `,
-      )
-      .run("2026-04-20T09:00:00.000Z", "2026-04-20T09:00:00.000Z");
-    app.db
-      .prepare(
-        `
-          INSERT INTO workout_assignments (
-            id,
-            user_id,
-            workout_template_id,
-            assigned_by,
-            starts_on,
-            ends_on,
-            schedule_notes,
-            frequency_per_week,
-            is_active,
-            created_at,
-            updated_at
-          )
-          VALUES (?, 'user_other', 'template_foundation_a', 'coach_other', '2026-04-20', NULL, NULL, 1, 1, ?, ?)
-        `,
-      )
-      .run(
-        "assignment_other_foundation",
-        "2026-04-20T09:00:00.000Z",
-        "2026-04-20T09:00:00.000Z",
-      );
-
     const invalidAssignment = await app.inject({
       method: "POST",
       url: "/api/v1/me/workout-sessions",
       headers,
       payload: {
-        assignmentId: "assignment_other_foundation",
+        assignmentId: "assignment_missing",
         workoutTemplateId: "template_foundation_a",
       },
     });

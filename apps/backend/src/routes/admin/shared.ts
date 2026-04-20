@@ -9,7 +9,6 @@ export type PaginationQuery = {
   offset?: number;
   search?: string;
   status?: string;
-  userId?: string;
 };
 
 export const errorResponseSchema = {
@@ -38,7 +37,6 @@ export const paginationQuerySchema = {
     search: { type: "string", minLength: 1, maxLength: 120 },
     isActive: { type: "boolean" },
     status: { type: "string", minLength: 1, maxLength: 40 },
-    userId: { type: "string", minLength: 1 },
   },
 } as const;
 export const paginationResponseSchema = {

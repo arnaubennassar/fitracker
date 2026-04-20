@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
     | {
         authenticated: false;
         session: null;
-        user: null;
       }
     | null,
 }));
@@ -404,7 +403,6 @@ describe("session runner page", () => {
     mocks.session = {
       authenticated: false,
       session: null,
-      user: null,
     };
 
     render(<SessionRunnerPage />);

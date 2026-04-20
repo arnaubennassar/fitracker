@@ -37,8 +37,6 @@ type AssignmentRow = {
   schedule_notes: string | null;
   starts_on: string;
   updated_at: string;
-  user_display_name: string;
-  user_id: string;
   workout_template_id: string;
   workout_template_name: string;
   workout_template_slug: string;
@@ -48,7 +46,6 @@ const assignmentSchema = {
   type: "object",
   required: [
     "id",
-    "user",
     "workoutTemplate",
     "assignedBy",
     "startsOn",
@@ -64,18 +61,6 @@ const assignmentSchema = {
   properties: {
     id: {
       type: "string",
-    },
-    user: {
-      type: "object",
-      required: ["id", "displayName"],
-      properties: {
-        id: {
-          type: "string",
-        },
-        displayName: {
-          type: "string",
-        },
-      },
     },
     workoutTemplate: {
       type: "object",
@@ -113,15 +98,11 @@ const assignmentSchema = {
 
 const assignmentBodySchema = {
   type: "object",
-  required: ["userId", "workoutTemplateId", "assignedBy", "startsOn"],
+  required: ["workoutTemplateId", "assignedBy", "startsOn"],
   additionalProperties: false,
   properties: {
     id: {
       type: "string",
-    },
-    userId: {
-      type: "string",
-      minLength: 1,
     },
     workoutTemplateId: {
       type: "string",
@@ -166,10 +147,6 @@ const assignmentBodySchema = {
 function mapAssignment(row: AssignmentRow) {
   return {
     id: row.id,
-    user: {
-      id: row.user_id,
-      displayName: row.user_display_name,
-    },
     workoutTemplate: {
       id: row.workout_template_id,
       name: row.workout_template_name,
@@ -192,8 +169,6 @@ function assignmentBaseQuery(whereClause: string) {
   return `
     SELECT
       workout_assignments.id,
-      workout_assignments.user_id,
-      users.display_name AS user_display_name,
       workout_assignments.workout_template_id,
       workout_templates.name AS workout_template_name,
       workout_templates.slug AS workout_template_slug,
@@ -216,8 +191,6 @@ function assignmentBaseQuery(whereClause: string) {
         END
       ) AS last_completed_at
     FROM workout_assignments
-    INNER JOIN users
-      ON users.id = workout_assignments.user_id
     INNER JOIN workout_templates
       ON workout_templates.id = workout_assignments.workout_template_id
     LEFT JOIN workout_sessions
@@ -225,8 +198,6 @@ function assignmentBaseQuery(whereClause: string) {
     ${whereClause}
     GROUP BY
       workout_assignments.id,
-      workout_assignments.user_id,
-      users.display_name,
       workout_assignments.workout_template_id,
       workout_templates.name,
       workout_templates.slug,
@@ -259,13 +230,14 @@ function getAssignmentDetail(request: FastifyRequest, assignmentId: string) {
 
 function validateAssignmentWindow(
   reply: FastifyReply,
-  body: { endsOn?: string | null; startsOn: string },
+  startsOn: string,
+  endsOn: string | null,
 ) {
-  if (body.endsOn && body.endsOn < body.startsOn) {
+  if (endsOn && endsOn < startsOn) {
     return sendBadRequest(
       reply,
-      "ASSIGNMENT_WINDOW_INVALID",
-      "endsOn cannot be earlier than startsOn.",
+      "ASSIGNMENT_DATE_RANGE_INVALID",
+      "Assignment end date must be on or after the start date.",
     );
   }
 
@@ -276,28 +248,24 @@ async function listAssignments(request: FastifyRequest) {
   const query = request.query as PaginationQuery;
   const { limit, offset, search } = getPagination(query);
   const conditions: string[] = [];
-  const params: Array<string | number | null> = [];
+  const params: Array<string | number> = [];
 
   if (search) {
     conditions.push(
-      "(users.display_name LIKE ? COLLATE NOCASE OR workout_templates.name LIKE ? COLLATE NOCASE OR workout_assignments.assigned_by LIKE ? COLLATE NOCASE)",
+      "(workout_templates.name LIKE ? COLLATE NOCASE OR workout_assignments.assigned_by LIKE ? COLLATE NOCASE)",
     );
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-  }
-
-  if (query.userId) {
-    conditions.push("workout_assignments.user_id = ?");
-    params.push(query.userId);
+    params.push(`%${search}%`, `%${search}%`);
   }
 
   if (query.isActive !== undefined) {
     conditions.push("workout_assignments.is_active = ?");
-    params.push(Number(query.isActive));
+    params.push(toSqliteBoolean(query.isActive) ?? 0);
   }
 
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const rows = request.server.db
+  const whereClause = conditions.length
+    ? `WHERE ${conditions.join(" AND ")}`
+    : "";
+  const items = request.server.db
     .prepare(
       `
         ${assignmentBaseQuery(whereClause)}
@@ -306,13 +274,11 @@ async function listAssignments(request: FastifyRequest) {
       `,
     )
     .all(...params, limit, offset) as AssignmentRow[];
-  const countRow = request.server.db
+  const totalRow = request.server.db
     .prepare(
       `
         SELECT COUNT(*) AS count
         FROM workout_assignments
-        INNER JOIN users
-          ON users.id = workout_assignments.user_id
         INNER JOIN workout_templates
           ON workout_templates.id = workout_assignments.workout_template_id
         ${whereClause}
@@ -321,31 +287,45 @@ async function listAssignments(request: FastifyRequest) {
     .get(...params) as { count: number };
 
   return {
-    items: rows.map(mapAssignment),
+    items: items.map(mapAssignment),
     pagination: {
       limit,
       offset,
-      total: countRow.count,
+      total: totalRow.count,
     },
   };
 }
 
+async function getAssignment(request: FastifyRequest, reply: FastifyReply) {
+  const params = request.params as { id: string };
+  const assignment = getAssignmentDetail(request, params.id);
+
+  return (
+    assignment ??
+    sendNotFound(reply, "ASSIGNMENT_NOT_FOUND", "Assignment not found.")
+  );
+}
+
 async function createAssignment(request: FastifyRequest, reply: FastifyReply) {
   const body = request.body as {
-    id?: string;
     assignedBy: string;
     endsOn?: string | null;
     frequencyPerWeek?: number | null;
+    id?: string;
     isActive?: boolean;
     scheduleNotes?: string | null;
     startsOn: string;
-    userId: string;
     workoutTemplateId: string;
   };
-  const validationError = validateAssignmentWindow(reply, body);
 
-  if (validationError) {
-    return validationError;
+  const dateError = validateAssignmentWindow(
+    reply,
+    body.startsOn,
+    body.endsOn ?? null,
+  );
+
+  if (dateError) {
+    return dateError;
   }
 
   const id = body.id ?? createId("assignment");
@@ -357,7 +337,6 @@ async function createAssignment(request: FastifyRequest, reply: FastifyReply) {
         `
           INSERT INTO workout_assignments (
             id,
-            user_id,
             workout_template_id,
             assigned_by,
             starts_on,
@@ -368,56 +347,42 @@ async function createAssignment(request: FastifyRequest, reply: FastifyReply) {
             created_at,
             updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
       .run(
         id,
-        body.userId,
         body.workoutTemplateId,
         body.assignedBy.trim(),
         body.startsOn,
         body.endsOn ?? null,
         body.scheduleNotes ?? null,
         body.frequencyPerWeek ?? null,
-        toSqliteBoolean(body.isActive) ?? 1,
+        toSqliteBoolean(body.isActive ?? true) ?? 1,
         now,
         now,
       );
   } catch (error) {
     return handleSqliteError(reply, error, {
       conflictCode: "ASSIGNMENT_CONFLICT",
-      conflictMessage:
-        "Assignment references a missing user or workout template.",
+      conflictMessage: "Assignment could not be created.",
     });
   }
 
   return reply.code(201).send(getAssignmentDetail(request, id));
 }
 
-async function getAssignmentById(request: FastifyRequest, reply: FastifyReply) {
-  const params = request.params as { id: string };
-  const assignment = getAssignmentDetail(request, params.id);
-
-  if (!assignment) {
-    return sendNotFound(reply, "ASSIGNMENT_NOT_FOUND", "Assignment not found.");
-  }
-
-  return assignment;
-}
-
 async function updateAssignment(request: FastifyRequest, reply: FastifyReply) {
   const params = request.params as { id: string };
-  const body = request.body as Partial<{
-    assignedBy: string;
+  const body = request.body as {
+    assignedBy?: string;
     endsOn?: string | null;
     frequencyPerWeek?: number | null;
     isActive?: boolean;
     scheduleNotes?: string | null;
-    startsOn: string;
-    userId: string;
-    workoutTemplateId: string;
-  }>;
+    startsOn?: string;
+    workoutTemplateId?: string;
+  };
   const current = getAssignmentDetail(request, params.id);
 
   if (!current) {
@@ -426,24 +391,17 @@ async function updateAssignment(request: FastifyRequest, reply: FastifyReply) {
 
   const next = {
     assignedBy: body.assignedBy ?? current.assignedBy,
-    endsOn: body.endsOn === undefined ? current.endsOn : body.endsOn,
-    frequencyPerWeek:
-      body.frequencyPerWeek === undefined
-        ? current.frequencyPerWeek
-        : body.frequencyPerWeek,
+    endsOn: body.endsOn ?? current.endsOn,
+    frequencyPerWeek: body.frequencyPerWeek ?? current.frequencyPerWeek,
     isActive: body.isActive ?? current.isActive,
-    scheduleNotes:
-      body.scheduleNotes === undefined
-        ? current.scheduleNotes
-        : body.scheduleNotes,
+    scheduleNotes: body.scheduleNotes ?? current.scheduleNotes,
     startsOn: body.startsOn ?? current.startsOn,
-    userId: body.userId ?? current.user.id,
     workoutTemplateId: body.workoutTemplateId ?? current.workoutTemplate.id,
   };
-  const validationError = validateAssignmentWindow(reply, next);
+  const dateError = validateAssignmentWindow(reply, next.startsOn, next.endsOn);
 
-  if (validationError) {
-    return validationError;
+  if (dateError) {
+    return dateError;
   }
 
   try {
@@ -451,36 +409,32 @@ async function updateAssignment(request: FastifyRequest, reply: FastifyReply) {
       .prepare(
         `
           UPDATE workout_assignments
-          SET
-            user_id = ?,
-            workout_template_id = ?,
-            assigned_by = ?,
-            starts_on = ?,
-            ends_on = ?,
-            schedule_notes = ?,
-            frequency_per_week = ?,
-            is_active = ?,
-            updated_at = ?
+          SET workout_template_id = ?,
+              assigned_by = ?,
+              starts_on = ?,
+              ends_on = ?,
+              schedule_notes = ?,
+              frequency_per_week = ?,
+              is_active = ?,
+              updated_at = ?
           WHERE id = ?
         `,
       )
       .run(
-        next.userId,
         next.workoutTemplateId,
         next.assignedBy.trim(),
         next.startsOn,
-        next.endsOn ?? null,
-        next.scheduleNotes ?? null,
-        next.frequencyPerWeek ?? null,
-        toSqliteBoolean(next.isActive) ?? 1,
+        next.endsOn,
+        next.scheduleNotes,
+        next.frequencyPerWeek,
+        toSqliteBoolean(next.isActive) ?? 0,
         nowIsoString(),
         params.id,
       );
   } catch (error) {
     return handleSqliteError(reply, error, {
-      conflictCode: "ASSIGNMENT_UPDATE_CONFLICT",
-      conflictMessage:
-        "Assignment update references a missing user or workout template.",
+      conflictCode: "ASSIGNMENT_CONFLICT",
+      conflictMessage: "Assignment could not be updated.",
     });
   }
 
@@ -497,24 +451,8 @@ async function deleteAssignment(request: FastifyRequest, reply: FastifyReply) {
     return sendNotFound(reply, "ASSIGNMENT_NOT_FOUND", "Assignment not found.");
   }
 
-  return {
-    deleted: true,
-    id: params.id,
-  };
+  return reply.code(204).send();
 }
-
-const deleteResponseSchema = {
-  type: "object",
-  required: ["deleted", "id"],
-  properties: {
-    deleted: {
-      type: "boolean",
-    },
-    id: {
-      type: "string",
-    },
-  },
-} as const;
 
 export function adminAssignmentRoutes({
   apiBasePath,
@@ -524,7 +462,7 @@ export function adminAssignmentRoutes({
   return [
     {
       method: "GET",
-      operationId: "listWorkoutAssignments",
+      operationId: "listAssignments",
       preHandler: auth,
       responseContentType: "application/json",
       response: {
@@ -547,8 +485,34 @@ export function adminAssignmentRoutes({
       security: [{ bearerAuth: [] }],
     },
     {
+      method: "GET",
+      operationId: "getAssignment",
+      preHandler: auth,
+      responseContentType: "application/json",
+      response: {
+        200: assignmentSchema,
+        401: errorResponseSchema,
+        404: errorResponseSchema,
+      },
+      summary: "Get one workout assignment.",
+      tags: ["admin-assignments"],
+      url: `${apiBasePath}/admin/assignments/:id`,
+      schema: buildRouteSchema({
+        tags: ["admin-assignments"],
+        summary: "Get one workout assignment.",
+        params: idParamSchema,
+        response: {
+          200: assignmentSchema,
+          401: errorResponseSchema,
+          404: errorResponseSchema,
+        },
+      }),
+      handler: getAssignment,
+      security: [{ bearerAuth: [] }],
+    },
+    {
       method: "POST",
-      operationId: "createWorkoutAssignment",
+      operationId: "createAssignment",
       preHandler: auth,
       responseContentType: "application/json",
       response: {
@@ -561,9 +525,9 @@ export function adminAssignmentRoutes({
       tags: ["admin-assignments"],
       url: `${apiBasePath}/admin/assignments`,
       schema: buildRouteSchema({
+        body: assignmentBodySchema,
         tags: ["admin-assignments"],
         summary: "Create a workout assignment.",
-        body: assignmentBodySchema,
         response: {
           201: assignmentSchema,
           400: errorResponseSchema,
@@ -575,34 +539,8 @@ export function adminAssignmentRoutes({
       security: [{ bearerAuth: [] }],
     },
     {
-      method: "GET",
-      operationId: "getWorkoutAssignment",
-      preHandler: auth,
-      responseContentType: "application/json",
-      response: {
-        200: assignmentSchema,
-        401: errorResponseSchema,
-        404: errorResponseSchema,
-      },
-      summary: "Get a workout assignment.",
-      tags: ["admin-assignments"],
-      url: `${apiBasePath}/admin/assignments/:id`,
-      schema: buildRouteSchema({
-        tags: ["admin-assignments"],
-        summary: "Get a workout assignment.",
-        params: idParamSchema,
-        response: {
-          200: assignmentSchema,
-          401: errorResponseSchema,
-          404: errorResponseSchema,
-        },
-      }),
-      handler: getAssignmentById,
-      security: [{ bearerAuth: [] }],
-    },
-    {
       method: "PATCH",
-      operationId: "updateWorkoutAssignment",
+      operationId: "updateAssignment",
       preHandler: auth,
       responseContentType: "application/json",
       response: {
@@ -616,10 +554,13 @@ export function adminAssignmentRoutes({
       tags: ["admin-assignments"],
       url: `${apiBasePath}/admin/assignments/:id`,
       schema: buildRouteSchema({
+        body: {
+          ...assignmentBodySchema,
+          required: [],
+        },
         tags: ["admin-assignments"],
         summary: "Update a workout assignment.",
         params: idParamSchema,
-        body: assignmentBodySchema,
         response: {
           200: assignmentSchema,
           400: errorResponseSchema,
@@ -633,11 +574,11 @@ export function adminAssignmentRoutes({
     },
     {
       method: "DELETE",
-      operationId: "deleteWorkoutAssignment",
+      operationId: "deleteAssignment",
       preHandler: auth,
       responseContentType: "application/json",
       response: {
-        200: deleteResponseSchema,
+        204: { type: "null" },
         401: errorResponseSchema,
         404: errorResponseSchema,
       },
@@ -649,7 +590,7 @@ export function adminAssignmentRoutes({
         summary: "Delete a workout assignment.",
         params: idParamSchema,
         response: {
-          200: deleteResponseSchema,
+          204: { type: "null" },
           401: errorResponseSchema,
           404: errorResponseSchema,
         },

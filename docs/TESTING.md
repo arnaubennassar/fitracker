@@ -164,7 +164,7 @@ This suite should stay small and target only the highest-risk flows.
 ### Auth
 
 - Unit: payload shaping and small helpers.
-- Page/component: login form behavior, registration trimming, error handling, redirect behavior.
+- Page/component: login bootstrap behavior, auto login vs auto registration, error handling, redirect behavior.
 - E2E: authenticate and enter the app.
 
 ### Dashboard

@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
     | {
         authenticated: false;
         session: null;
-        user: null;
       }
     | null,
 }));
@@ -66,7 +65,6 @@ describe("history page", () => {
     mocks.session = {
       authenticated: false,
       session: null,
-      user: null,
     };
 
     render(<HistoryPage />);

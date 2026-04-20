@@ -11,7 +11,10 @@ test("shows the missing-passkey guidance when sign-in cannot find a saved creden
     authSession: {
       authenticated: false,
       session: null,
-      user: null,
+    },
+    passkeyStatus: {
+      authenticated: false,
+      hasPasskey: true,
     },
     failures: {
       loginOptions: {
@@ -25,11 +28,10 @@ test("shows the missing-passkey guidance when sign-in cannot find a saved creden
   });
 
   await page.goto("/login");
-  await page.getByRole("button", { name: "Sign in with passkey" }).click();
 
   await expect(
     page.getByText(
-      "No saved passkey is registered for that athlete yet. Use Create passkey on this device first.",
+      "No passkey is registered yet on this app. Retry to create one on this device.",
     ),
   ).toBeVisible();
 });

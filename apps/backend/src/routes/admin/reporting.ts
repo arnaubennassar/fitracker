@@ -70,7 +70,6 @@ const feedbackSchema = {
   required: [
     "id",
     "workoutSessionId",
-    "userId",
     "mood",
     "difficultyRating",
     "energyRating",
@@ -82,7 +81,6 @@ const feedbackSchema = {
   properties: {
     id: { type: "string" },
     workoutSessionId: { type: "string" },
-    userId: { type: "string" },
     mood: nullableStringSchema,
     difficultyRating: nullableIntegerSchema,
     energyRating: nullableIntegerSchema,
@@ -97,7 +95,6 @@ const sessionSchema = {
   type: "object",
   required: [
     "id",
-    "user",
     "workoutTemplate",
     "assignmentId",
     "status",
@@ -113,14 +110,6 @@ const sessionSchema = {
   ],
   properties: {
     id: { type: "string" },
-    user: {
-      type: "object",
-      required: ["id", "displayName"],
-      properties: {
-        id: { type: "string" },
-        displayName: { type: "string" },
-      },
-    },
     workoutTemplate: {
       type: "object",
       required: ["id", "name", "slug"],
@@ -213,7 +202,6 @@ function mapFeedback(
   return {
     id: feedback.id,
     workoutSessionId: feedback.workoutSessionId,
-    userId: feedback.userId,
     mood: feedback.mood,
     difficultyRating: feedback.difficultyRating,
     energyRating: feedback.energyRating,
@@ -229,7 +217,6 @@ function mapSession(
 ) {
   return {
     id: session.id,
-    user: session.user,
     workoutTemplate: session.workoutTemplate,
     assignmentId: session.assignmentId,
     status: session.status,
@@ -250,7 +237,6 @@ async function listSessions(request: FastifyRequest) {
   const { limit, offset } = getPagination(query);
   const filters = {
     ...(query.status ? { status: query.status } : {}),
-    ...(query.userId ? { userId: query.userId } : {}),
   };
   const sessionDetails = listWorkoutSessionRows(request.server.db, filters, {
     limit,
@@ -301,11 +287,7 @@ async function getSession(request: FastifyRequest, reply: FastifyReply) {
 async function listFeedbackEntries(request: FastifyRequest) {
   const query = request.query as PaginationQuery;
   const { limit, offset } = getPagination(query);
-  const result = listWorkoutFeedback(
-    request.server.db,
-    query.userId ? { userId: query.userId } : {},
-    { limit, offset },
-  );
+  const result = listWorkoutFeedback(request.server.db, { limit, offset });
 
   return {
     items: result.items.map((item) => mapFeedback(item)),

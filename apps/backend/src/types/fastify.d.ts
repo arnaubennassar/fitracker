@@ -21,11 +21,6 @@ declare module "fastify" {
           expiresAt: string;
           id: string;
           lastSeenAt: string;
-          user: {
-            displayName: string;
-            id: string;
-            status: string;
-          };
         }
       | undefined;
   }

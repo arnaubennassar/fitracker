@@ -84,7 +84,6 @@ export type SeedWorkoutAssignment = {
   scheduleNotes: string | null;
   startsOn: string;
   updatedAt: string;
-  userId: string;
   workoutTemplateId: string;
 };
 
@@ -99,7 +98,6 @@ export type SeedWorkoutSession = {
   startedAt: string;
   status: "abandoned" | "completed" | "in_progress" | "planned";
   updatedAt: string;
-  userId: string;
   workoutTemplateId: string;
 };
 
@@ -131,6 +129,5 @@ export type SeedWorkoutFeedback = {
   painFlag: boolean;
   painNotes: string | null;
   submittedAt: string;
-  userId: string;
   workoutSessionId: string;
 };

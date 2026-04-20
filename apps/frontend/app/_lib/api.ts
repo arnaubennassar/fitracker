@@ -3,6 +3,7 @@ import type {
   CreateSetPayload,
   ExerciseDetail,
   FeedbackPayload,
+  PasskeyStatus,
   TodayWorkoutsResponse,
   WorkoutAssignmentsResponse,
   WorkoutFeedback,
@@ -78,6 +79,10 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}) {
 
 export function getAuthSession() {
   return apiFetch<AuthSession>("/auth/me");
+}
+
+export function getPasskeyStatus() {
+  return apiFetch<PasskeyStatus>("/auth/passkey/status");
 }
 
 export function logoutUser() {

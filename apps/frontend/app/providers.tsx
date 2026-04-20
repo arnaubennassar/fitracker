@@ -88,7 +88,6 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     setSession({
       authenticated: false,
       session: null,
-      user: null,
     });
   }
 

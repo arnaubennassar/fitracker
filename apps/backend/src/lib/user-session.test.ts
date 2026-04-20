@@ -110,28 +110,24 @@ test("createUserSession resolves, refreshes, and revokes cookie-backed sessions"
       server: app,
     };
     const reply = createReplyStub();
-    const created = createUserSession(
-      request as never,
-      reply as never,
-      "user_arnau",
-    );
+    const created = createUserSession(request as never, reply as never);
     const sessionCookie = parseSessionCookie(
       reply.headers["set-cookie"] as string,
     );
 
     assert.ok(sessionCookie);
-    assert.ok(created.id.startsWith("usersession_"));
+    assert.ok(created.id.startsWith("athletesession_"));
 
     request.headers.cookie = `fitracker_session=${sessionCookie}`;
     const session = resolveUserSession(request as never);
 
     assert.ok(session);
-    assert.equal(session?.user.id, "user_arnau");
+    assert.equal(session?.id, created.id);
 
     app.db
       .prepare(
         `
-          UPDATE user_sessions
+          UPDATE athlete_sessions
           SET last_seen_at = '2026-04-20T08:00:00.000Z'
           WHERE id = ?
         `,
@@ -151,7 +147,7 @@ test("createUserSession resolves, refreshes, and revokes cookie-backed sessions"
   }
 });
 
-test("resolveUserSession rejects expired and inactive sessions and clearUserSessionCookie expires the cookie", async () => {
+test("resolveUserSession rejects expired sessions and clearUserSessionCookie expires the cookie", async () => {
   const context = createTestEnv();
   const app = buildApp({ env: context.env });
   seedDatabase(app.db, context.env);
@@ -164,11 +160,7 @@ test("resolveUserSession rejects expired and inactive sessions and clearUserSess
       server: app,
     };
     const reply = createReplyStub();
-    const created = createUserSession(
-      request as never,
-      reply as never,
-      "user_arnau",
-    );
+    const created = createUserSession(request as never, reply as never);
     const sessionCookie = parseSessionCookie(
       reply.headers["set-cookie"] as string,
     );
@@ -179,7 +171,7 @@ test("resolveUserSession rejects expired and inactive sessions and clearUserSess
     app.db
       .prepare(
         `
-          UPDATE user_sessions
+          UPDATE athlete_sessions
           SET expires_at = '2026-04-19T09:00:00.000Z'
           WHERE id = ?
         `,
@@ -187,36 +179,11 @@ test("resolveUserSession rejects expired and inactive sessions and clearUserSess
       .run(created.id);
     assert.equal(resolveUserSession(request as never), null);
 
-    const secondReply = createReplyStub();
-    const secondSession = createUserSession(
-      request as never,
-      secondReply as never,
-      "user_arnau",
-    );
-    const secondCookie = parseSessionCookie(
-      secondReply.headers["set-cookie"] as string,
-    );
-
-    assert.ok(secondCookie);
-    request.headers.cookie = `fitracker_session=${secondCookie}`;
-    app.db
-      .prepare(
-        `
-          UPDATE users
-          SET status = 'inactive'
-          WHERE id = 'user_arnau'
-        `,
-      )
-      .run();
-    assert.equal(resolveUserSession(request as never), null);
-
-    clearUserSessionCookie(request as never, secondReply as never);
+    clearUserSessionCookie(request as never, reply as never);
     assert.match(
-      String(secondReply.headers["set-cookie"]),
+      String(reply.headers["set-cookie"]),
       /Expires=Thu, 01 Jan 1970 00:00:00 GMT/,
     );
-
-    void secondSession;
   } finally {
     await app.close();
     context.cleanup();

@@ -51,7 +51,6 @@ test("set-log and feedback mappers normalize sqlite rows", () => {
       pain_flag: 0,
       pain_notes: null,
       submitted_at: "2026-04-20T10:00:00.000Z",
-      user_id: "user_arnau",
       workout_session_id: "session_1",
     })?.painFlag,
     false,
@@ -77,22 +76,12 @@ test("workout session repo supports filtering, invalid snapshot fallback, and re
 
     const single = getWorkoutSessionRow(app.db, {
       sessionId: "session_foundation_a_2026_01_10",
-      userId: "user_arnau",
     });
-    const paged = listWorkoutSessionRows(
-      app.db,
-      { userId: "user_arnau" },
-      { limit: 1, offset: 1 },
-    );
+    const paged = listWorkoutSessionRows(app.db, {}, { limit: 1, offset: 1 });
     const detail = getWorkoutSessionDetail(app.db, {
       sessionId: "session_foundation_a_2026_01_10",
-      userId: "user_arnau",
     });
-    const feedback = listWorkoutFeedback(
-      app.db,
-      { userId: "user_arnau" },
-      { limit: 10, offset: 0 },
-    );
+    const feedback = listWorkoutFeedback(app.db, { limit: 10, offset: 0 });
 
     assert.ok(single);
     assert.deepEqual(single?.performedVersionSnapshot, {});
@@ -100,22 +89,16 @@ test("workout session repo supports filtering, invalid snapshot fallback, and re
     assert.ok(detail);
     assert.equal(detail?.setLogs.length, 5);
     assert.equal(detail?.feedback?.difficultyRating, 7);
-    assert.equal(countWorkoutSessions(app.db, { userId: "user_arnau" }), 2);
-    assert.deepEqual(
-      summarizeWorkoutSessions(app.db, { userId: "user_arnau" }),
-      {
-        abandonedSessions: 1,
-        completedSessions: 1,
-        inProgressSessions: 0,
-        plannedSessions: 0,
-      },
-    );
+    assert.equal(countWorkoutSessions(app.db, {}), 2);
+    assert.deepEqual(summarizeWorkoutSessions(app.db, {}), {
+      abandonedSessions: 1,
+      completedSessions: 1,
+      inProgressSessions: 0,
+      plannedSessions: 0,
+    });
     assert.equal(feedback.total, 1);
     assert.equal(feedback.items[0]?.id, "feedback_foundation_a_2026_01_10");
-    assert.equal(
-      countWorkoutFeedbackBySessionFilters(app.db, { userId: "user_arnau" }),
-      1,
-    );
+    assert.equal(countWorkoutFeedbackBySessionFilters(app.db, {}), 1);
     assert.equal(
       getWorkoutFeedbackForSession(app.db, "session_foundation_a_2026_01_10")
         ?.id,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 
 export type MigrationStatus = {
   applied: string[];
@@ -13,7 +14,7 @@ type AppliedMigrationRow = {
 };
 
 function getMigrationDirectory() {
-  return join(process.cwd(), "migrations");
+  return join(fileURLToPath(new URL("../../migrations", import.meta.url)));
 }
 
 function getMigrationChecksum(contents: string) {

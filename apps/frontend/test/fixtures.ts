@@ -24,11 +24,6 @@ export function buildAuthSession(
       id: "session_cookie",
       lastSeenAt: DEFAULT_TIMESTAMP,
     },
-    user: {
-      displayName: "Arnau Bennassar",
-      id: "user_arnau",
-      status: "active",
-    },
     ...overrides,
   };
 }

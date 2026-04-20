@@ -11,13 +11,10 @@ import {
 const USER_SESSION_COOKIE_NAME = "fitracker_session";
 const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-type UserSessionRow = {
-  display_name: string;
+type AthleteSessionRow = {
   expires_at: string;
   id: string;
   last_seen_at: string;
-  status: string;
-  user_id: string;
 };
 
 function hashSessionToken(token: string) {
@@ -102,14 +99,13 @@ export function getRpName(request: FastifyRequest) {
 export function createUserSession(
   request: FastifyRequest,
   reply: FastifyReply,
-  userId: string,
 ) {
   const now = new Date();
   const expiresAt = new Date(
     now.getTime() +
       request.server.config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
   );
-  const sessionId = `usersession_${randomBytes(16).toString("hex")}`;
+  const sessionId = `athletesession_${randomBytes(16).toString("hex")}`;
   const sessionToken = randomBytes(32).toString("base64url");
   const nowIso = now.toISOString();
   const expiresAtIso = expiresAt.toISOString();
@@ -117,9 +113,8 @@ export function createUserSession(
   request.server.db
     .prepare(
       `
-        INSERT INTO user_sessions (
+        INSERT INTO athlete_sessions (
           id,
-          user_id,
           session_token_hash,
           created_at,
           updated_at,
@@ -127,12 +122,11 @@ export function createUserSession(
           expires_at,
           revoked_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+        VALUES (?, ?, ?, ?, ?, ?, NULL)
       `,
     )
     .run(
       sessionId,
-      userId,
       hashSessionToken(sessionToken),
       nowIso,
       nowIso,
@@ -168,15 +162,16 @@ export function revokeUserSession(
   sessionId?: string,
 ) {
   if (sessionId) {
+    const nowIso = new Date().toISOString();
     request.server.db
       .prepare(
         `
-          UPDATE user_sessions
+          UPDATE athlete_sessions
           SET revoked_at = ?, updated_at = ?
           WHERE id = ? AND revoked_at IS NULL
         `,
       )
-      .run(new Date().toISOString(), new Date().toISOString(), sessionId);
+      .run(nowIso, nowIso, sessionId);
   }
 
   clearUserSessionCookie(request, reply);
@@ -196,24 +191,19 @@ export function resolveUserSession(request: FastifyRequest) {
   const session = request.server.db
     .prepare(
       `
-        SELECT
-          user_sessions.id,
-          user_sessions.user_id,
-          user_sessions.last_seen_at,
-          user_sessions.expires_at,
-          users.display_name,
-          users.status
-        FROM user_sessions
-        INNER JOIN users ON users.id = user_sessions.user_id
-        WHERE user_sessions.session_token_hash = ?
-          AND user_sessions.revoked_at IS NULL
-          AND user_sessions.expires_at > ?
+        SELECT id, last_seen_at, expires_at
+        FROM athlete_sessions
+        WHERE session_token_hash = ?
+          AND revoked_at IS NULL
+          AND expires_at > ?
         LIMIT 1
       `,
     )
-    .get(hashSessionToken(sessionToken), nowIso) as UserSessionRow | undefined;
+    .get(hashSessionToken(sessionToken), nowIso) as
+    | AthleteSessionRow
+    | undefined;
 
-  if (!session || session.status !== "active") {
+  if (!session) {
     request.userSession = undefined;
     return null;
   }
@@ -222,11 +212,6 @@ export function resolveUserSession(request: FastifyRequest) {
     expiresAt: session.expires_at,
     id: session.id,
     lastSeenAt: session.last_seen_at,
-    user: {
-      displayName: session.display_name,
-      id: session.user_id,
-      status: session.status,
-    },
   };
 
   const lastSeen = new Date(session.last_seen_at).getTime();
@@ -238,7 +223,7 @@ export function resolveUserSession(request: FastifyRequest) {
     request.server.db
       .prepare(
         `
-          UPDATE user_sessions
+          UPDATE athlete_sessions
           SET last_seen_at = ?, updated_at = ?
           WHERE id = ?
         `,
