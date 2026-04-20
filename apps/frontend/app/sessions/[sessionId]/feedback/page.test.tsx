@@ -173,4 +173,52 @@ describe("feedback page", () => {
 
     expect(await screen.findByText("Could not save feedback.")).toBeVisible();
   });
+
+  test("clears pain notes when the toggle is turned off before save", async () => {
+    const user = userEvent.setup();
+
+    mocks.getWorkoutSession.mockResolvedValueOnce(buildWorkoutSession());
+    mocks.submitWorkoutFeedback.mockResolvedValueOnce(buildWorkoutFeedback());
+
+    render(<FeedbackPage />);
+
+    await screen.findByRole("heading", { name: "Session notes" });
+    await user.click(
+      screen.getByRole("checkbox", { name: "Pain or discomfort to flag" }),
+    );
+    await user.type(screen.getByLabelText("Pain notes"), "This should clear.");
+    await user.click(
+      screen.getByRole("checkbox", { name: "Pain or discomfort to flag" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save feedback" }));
+
+    await waitFor(() => {
+      expect(mocks.submitWorkoutFeedback).toHaveBeenCalledWith(
+        "session_foundation_a",
+        {
+          difficultyRating: null,
+          energyRating: null,
+          freeText: null,
+          mood: null,
+          painFlag: false,
+          painNotes: null,
+        },
+      );
+    });
+  });
+
+  test("skips feedback and routes back to history", async () => {
+    const user = userEvent.setup();
+
+    mocks.getWorkoutSession.mockResolvedValueOnce(buildWorkoutSession());
+
+    render(<FeedbackPage />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Skip for now" }),
+    );
+
+    expect(mocks.push).toHaveBeenCalledWith("/history");
+    expect(mocks.submitWorkoutFeedback).not.toHaveBeenCalled();
+  });
 });

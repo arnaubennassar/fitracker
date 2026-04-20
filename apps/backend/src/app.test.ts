@@ -13,6 +13,7 @@ import test from "node:test";
 import { buildApp } from "./app.js";
 import { seedDatabase } from "./db/seeds.js";
 import { loadEnv } from "./env.js";
+import { hashAdminToken } from "./lib/admin-token.js";
 
 function createTestEnv() {
   const directory = mkdtempSync(join(tmpdir(), "fitracker-backend-"));
@@ -57,6 +58,41 @@ test("GET /health reports a reachable database", async () => {
     assert.equal(payload.status, "ok");
     assert.equal(payload.database.reachable, true);
     assert.equal(payload.database.migrationCount, 6);
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("GET /, /api/v1/health, and /docs expose system entrypoints", async () => {
+  const context = createTestEnv();
+  const app = buildApp({ env: context.env });
+
+  try {
+    const root = await app.inject({
+      method: "GET",
+      url: "/",
+    });
+    const versionedHealth = await app.inject({
+      method: "GET",
+      url: "/api/v1/health",
+    });
+    const docs = await app.inject({
+      method: "GET",
+      url: "/docs",
+    });
+
+    assert.equal(root.statusCode, 200);
+    assert.equal(root.json().docsUrl, "/docs");
+    assert.equal(root.json().versionedApiBase, "/api/v1");
+
+    assert.equal(versionedHealth.statusCode, 200);
+    assert.equal(versionedHealth.json().status, "ok");
+    assert.equal(versionedHealth.json().database.reachable, true);
+
+    assert.equal(docs.statusCode, 200);
+    assert.match(docs.body, /Fitracker API docs/);
+    assert.match(docs.body, /\/openapi\.json/);
   } finally {
     await app.close();
     context.cleanup();
@@ -121,6 +157,100 @@ test("GET /api/v1/admin/session requires a valid seeded bearer token", async () 
 
     assert.equal(payload.authenticated, true);
     assert.equal(payload.token.name, context.env.ADMIN_SEED_TOKEN_NAME);
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("admin auth rejects malformed, expired, revoked, and incorrect bearer tokens", async () => {
+  const context = createTestEnv();
+  const app = buildApp({ env: context.env });
+  seedDatabase(app.db, context.env);
+
+  try {
+    app.db
+      .prepare(
+        `
+          INSERT INTO admin_tokens (
+            id,
+            name,
+            token_hash,
+            token_preview,
+            scopes,
+            last_used_at,
+            expires_at,
+            created_at,
+            revoked_at
+          )
+          VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+        `,
+      )
+      .run(
+        "admintoken_expired",
+        "Expired Token",
+        hashAdminToken("expired-token", { salt: "expired-salt" }),
+        "expi...token",
+        '["admin"]',
+        "2026-04-19T09:00:00.000Z",
+        "2026-04-19T09:00:00.000Z",
+        null,
+      );
+    app.db
+      .prepare(
+        `
+          INSERT INTO admin_tokens (
+            id,
+            name,
+            token_hash,
+            token_preview,
+            scopes,
+            last_used_at,
+            expires_at,
+            created_at,
+            revoked_at
+          )
+          VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+        `,
+      )
+      .run(
+        "admintoken_revoked",
+        "Revoked Token",
+        hashAdminToken("revoked-token", { salt: "revoked-salt" }),
+        "revo...token",
+        '["admin"]',
+        "2026-04-20T09:00:00.000Z",
+        "2026-04-20T09:05:00.000Z",
+      );
+
+    const malformed = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/session",
+      headers: {
+        authorization: "Token not-bearer",
+      },
+    });
+    const wrong = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/session",
+      headers: adminHeaders("wrong-token"),
+    });
+    const expired = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/session",
+      headers: adminHeaders("expired-token"),
+    });
+    const revoked = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/session",
+      headers: adminHeaders("revoked-token"),
+    });
+
+    assert.equal(malformed.statusCode, 401);
+    assert.equal(malformed.json().code, "ADMIN_TOKEN_UNAUTHORIZED");
+    assert.equal(wrong.statusCode, 401);
+    assert.equal(expired.statusCode, 401);
+    assert.equal(revoked.statusCode, 401);
   } finally {
     await app.close();
     context.cleanup();
@@ -326,6 +456,150 @@ test("admin workout templates and assignments CRUD are usable", async () => {
             assignment.id === assignmentPayload.id,
         ),
     );
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("admin delete and reporting not-found routes behave correctly", async () => {
+  const context = createTestEnv();
+  const app = buildApp({ env: context.env });
+  seedDatabase(app.db, context.env);
+
+  try {
+    const createCategory = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/categories",
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        name: "Mobility Reset",
+        description: "Temporary category",
+      },
+    });
+    const categoryId = createCategory.json().id as string;
+
+    const createExercise = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/exercises",
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        slug: "wall-slide",
+        name: "Wall Slide",
+        categoryId,
+        instructions: "Keep the ribcage down.",
+        trackingMode: "reps",
+        difficulty: "beginner",
+        equipment: [],
+        primaryMuscles: ["serratus"],
+        secondaryMuscles: [],
+      },
+    });
+    const exerciseId = createExercise.json().id as string;
+
+    const createTemplate = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/workout-templates",
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        slug: "mobility-reset",
+        name: "Mobility Reset",
+      },
+    });
+    const templateId = createTemplate.json().id as string;
+
+    const addTemplateExercise = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/workout-templates/${templateId}/exercises`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        blockLabel: "prep",
+        exerciseId,
+        sequence: 1,
+      },
+    });
+    const templateExerciseId = addTemplateExercise.json().exercises[0]
+      .id as string;
+
+    const updateTemplateExercise = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/workout-template-exercises/${templateExerciseId}`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        blockLabel: "warmup",
+        exerciseId,
+        isOptional: true,
+        sequence: 1,
+        targetSets: 2,
+      },
+    });
+
+    assert.equal(updateTemplateExercise.statusCode, 200);
+    assert.equal(updateTemplateExercise.json().exercises[0].isOptional, true);
+
+    const createAssignment = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/assignments",
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        assignedBy: "coach-fitnaista",
+        startsOn: "2026-04-20",
+        userId: "user_arnau",
+        workoutTemplateId: templateId,
+      },
+    });
+    const assignmentId = createAssignment.json().id as string;
+
+    const missingReportingSession = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/reporting/sessions/session_missing",
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+    });
+    assert.equal(missingReportingSession.statusCode, 404);
+    assert.equal(
+      missingReportingSession.json().code,
+      "WORKOUT_SESSION_NOT_FOUND",
+    );
+
+    const deleteAssignment = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/admin/assignments/${assignmentId}`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+    });
+    assert.equal(deleteAssignment.statusCode, 200);
+    assert.equal(deleteAssignment.json().deleted, true);
+
+    const deleteTemplateExercise = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/admin/workout-template-exercises/${templateExerciseId}`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+    });
+    assert.equal(deleteTemplateExercise.statusCode, 200);
+    assert.equal(deleteTemplateExercise.json().deleted, true);
+
+    const deleteTemplate = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/admin/workout-templates/${templateId}`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+    });
+    assert.equal(deleteTemplate.statusCode, 200);
+    assert.equal(deleteTemplate.json().deleted, true);
+
+    const deleteExercise = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/admin/exercises/${exerciseId}`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+    });
+    assert.equal(deleteExercise.statusCode, 200);
+    assert.equal(deleteExercise.json().deleted, true);
+
+    const deleteCategory = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/admin/categories/${categoryId}`,
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+    });
+    assert.equal(deleteCategory.statusCode, 200);
+    assert.equal(deleteCategory.json().deleted, true);
   } finally {
     await app.close();
     context.cleanup();

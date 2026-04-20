@@ -188,4 +188,65 @@ describe("workout detail page", () => {
       await screen.findByText("Could not start the workout."),
     ).toBeVisible();
   });
+
+  test("loads the workout even if the selected exercise detail request fails", async () => {
+    mocks.getWorkoutDetail.mockResolvedValueOnce(buildWorkoutTemplateDetail());
+    mocks.getTodayWorkouts.mockResolvedValueOnce(buildTodayWorkoutsResponse());
+    mocks.listWorkoutSessions.mockResolvedValueOnce(
+      buildWorkoutSessionListResponse([]),
+    );
+    mocks.getExerciseDetail.mockRejectedValueOnce(
+      new Error("Exercise unavailable."),
+    );
+
+    render(<WorkoutDetailPage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Foundation Session A" }),
+    ).toBeVisible();
+    expect(screen.queryByText("Brace and squat.")).not.toBeInTheDocument();
+  });
+
+  test("shows a load error when the workout request fails", async () => {
+    mocks.getWorkoutDetail.mockRejectedValueOnce(
+      await createApiError("Could not load the workout.", 500),
+    );
+    mocks.getTodayWorkouts.mockResolvedValueOnce(buildTodayWorkoutsResponse());
+    mocks.listWorkoutSessions.mockResolvedValueOnce(
+      buildWorkoutSessionListResponse([]),
+    );
+
+    render(<WorkoutDetailPage />);
+
+    expect(
+      await screen.findByText("Could not load the workout."),
+    ).toBeVisible();
+  });
+
+  test("starts without an assignment when the workout is opened outside today's list", async () => {
+    const user = userEvent.setup();
+
+    mocks.getWorkoutDetail.mockResolvedValueOnce(buildWorkoutTemplateDetail());
+    mocks.getTodayWorkouts.mockResolvedValueOnce(
+      buildTodayWorkoutsResponse({ items: [] }),
+    );
+    mocks.listWorkoutSessions.mockResolvedValueOnce(
+      buildWorkoutSessionListResponse([]),
+    );
+    mocks.getExerciseDetail.mockResolvedValueOnce(buildExerciseDetail());
+    mocks.createWorkoutSession.mockResolvedValueOnce(
+      buildWorkoutSession({ id: "session_unassigned" }),
+    );
+
+    render(<WorkoutDetailPage />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Start workout" }),
+    );
+
+    expect(mocks.createWorkoutSession).toHaveBeenCalledWith({
+      assignmentId: null,
+      workoutTemplateId: "template_foundation_a",
+    });
+  });
 });

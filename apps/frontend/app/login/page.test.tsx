@@ -60,6 +60,17 @@ async function createApiError(
   return new ApiError(message, statusCode, code);
 }
 
+function createDeferredPromise<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, reject, resolve };
+}
+
 describe("login page", () => {
   beforeEach(() => {
     mocks.apiFetch.mockReset();
@@ -235,5 +246,72 @@ describe("login page", () => {
         "No saved passkey is registered for that athlete yet. Use Create passkey on this device first.",
       ),
     ).toBeVisible();
+  });
+
+  test("requires athlete details before creating a passkey", async () => {
+    const user = userEvent.setup();
+
+    render(<LoginPage />);
+
+    await user.clear(screen.getByLabelText("Athlete ID"));
+    await user.clear(screen.getByLabelText("Display name"));
+    await user.click(screen.getByRole("button", { name: "Create passkey" }));
+
+    expect(
+      await screen.findByText(
+        "Athlete ID and display name are required to create a passkey.",
+      ),
+    ).toBeVisible();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
+  });
+
+  test("surfaces generic fallback errors during sign-in", async () => {
+    const user = userEvent.setup();
+
+    mocks.apiFetch.mockRejectedValueOnce(
+      new Error("Passkey bridge unavailable."),
+    );
+
+    render(<LoginPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Sign in with passkey" }),
+    );
+
+    expect(
+      await screen.findByText("Passkey bridge unavailable."),
+    ).toBeVisible();
+  });
+
+  test("disables both auth actions while a passkey request is pending", async () => {
+    const user = userEvent.setup();
+    const pendingLogin = createDeferredPromise<{
+      challengeId: string;
+      publicKey: {
+        allowCredentials: [];
+        challenge: string;
+        rpId: string;
+        timeout: number;
+        userVerification: "required";
+      };
+    }>();
+
+    mocks.apiFetch.mockReturnValueOnce(pendingLogin.promise);
+
+    render(<LoginPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Sign in with passkey" }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Waiting for passkey..." }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Create passkey" }),
+    ).toBeDisabled();
+
+    pendingLogin.reject(new Error("Request aborted."));
+    expect(await screen.findByText("Request aborted.")).toBeVisible();
   });
 });

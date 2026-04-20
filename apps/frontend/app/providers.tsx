@@ -1,5 +1,7 @@
 "use client";
 
+// biome-ignore lint/style/useImportType: Vitest needs a runtime React import for JSX in this file.
+import React from "react";
 import {
   createContext,
   useCallback,

@@ -21,7 +21,24 @@ import {
 type MockApiOptions = {
   authSession?: AuthSession;
   exercises?: Record<string, ExerciseDetail>;
+  failures?: Partial<
+    Record<
+      | "authSession"
+      | "createWorkoutSession"
+      | "createWorkoutSet"
+      | "completeWorkoutSession"
+      | "feedback"
+      | "loginOptions"
+      | "todayWorkouts"
+      | "workoutDetail",
+      {
+        body?: { code?: string; error?: string };
+        status: number;
+      }
+    >
+  >;
   loginSession?: AuthSession;
+  registerSession?: AuthSession;
   sessions?: WorkoutSessionDetail[];
   todayWorkouts?: TodayWorkoutsResponse;
   workouts?: Record<string, WorkoutTemplateDetail>;
@@ -87,6 +104,7 @@ export async function mockFitrackerApi(
       ...(options.exercises ?? {}),
     },
     loginSession: clone(options.loginSession ?? buildAuthSession()),
+    registerSession: clone(options.registerSession ?? buildAuthSession()),
     sessions: clone(options.sessions ?? []),
     todayWorkouts: clone(options.todayWorkouts ?? buildTodayWorkoutsResponse()),
     workouts: {
@@ -105,6 +123,24 @@ export async function mockFitrackerApi(
     });
   }
 
+  async function fail(
+    route: Route,
+    key: keyof NonNullable<MockApiOptions["failures"]>,
+  ) {
+    const failure = options.failures?.[key];
+
+    if (!failure) {
+      return false;
+    }
+
+    await json(
+      route,
+      failure.body ?? { error: "Mocked API failure." },
+      failure.status,
+    );
+    return true;
+  }
+
   await page.route("**/api/v1/**", async (route) => {
     try {
       const request = route.request();
@@ -113,6 +149,10 @@ export async function mockFitrackerApi(
       const { pathname, searchParams } = url;
 
       if (pathname === "/api/v1/auth/me" && method === "GET") {
+        if (await fail(route, "authSession")) {
+          return;
+        }
+
         return json(route, state.authSession);
       }
 
@@ -120,6 +160,10 @@ export async function mockFitrackerApi(
         pathname === "/api/v1/auth/passkey/login/options" &&
         method === "POST"
       ) {
+        if (await fail(route, "loginOptions")) {
+          return;
+        }
+
         return json(route, {
           challengeId: "challenge_e2e",
           publicKey: {
@@ -140,7 +184,49 @@ export async function mockFitrackerApi(
         return json(route, state.loginSession);
       }
 
+      if (
+        pathname === "/api/v1/auth/passkey/register/options" &&
+        method === "POST"
+      ) {
+        const payload = request.postDataJSON() as {
+          displayName: string;
+          userId: string;
+        };
+
+        return json(route, {
+          challengeId: "challenge_register_e2e",
+          publicKey: {
+            attestation: "none",
+            challenge: "Y2hhbGxlbmdlX3JlZ2lzdGVy",
+            excludeCredentials: [],
+            pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+            rp: {
+              id: "127.0.0.1",
+              name: "Fitracker Test",
+            },
+            timeout: 60000,
+            user: {
+              displayName: payload.displayName,
+              id: "dXNlcl9lMmU",
+              name: payload.userId,
+            },
+          },
+        });
+      }
+
+      if (
+        pathname === "/api/v1/auth/passkey/register/verify" &&
+        method === "POST"
+      ) {
+        state.authSession = clone(state.registerSession);
+        return json(route, state.registerSession);
+      }
+
       if (pathname === "/api/v1/me/workouts/today" && method === "GET") {
+        if (await fail(route, "todayWorkouts")) {
+          return;
+        }
+
         return json(route, state.todayWorkouts);
       }
 
@@ -149,6 +235,10 @@ export async function mockFitrackerApi(
       }
 
       if (pathname === "/api/v1/me/workout-sessions" && method === "POST") {
+        if (await fail(route, "createWorkoutSession")) {
+          return;
+        }
+
         const payload = request.postDataJSON() as {
           assignmentId?: string | null;
           workoutTemplateId: string;
@@ -175,6 +265,10 @@ export async function mockFitrackerApi(
       }
 
       if (pathname.startsWith("/api/v1/me/workouts/") && method === "GET") {
+        if (await fail(route, "workoutDetail")) {
+          return;
+        }
+
         const workoutId = pathname.replace("/api/v1/me/workouts/", "");
         const workout = state.workouts[workoutId];
 
@@ -217,6 +311,10 @@ export async function mockFitrackerApi(
       );
 
       if (setMatch && method === "POST") {
+        if (await fail(route, "createWorkoutSet")) {
+          return;
+        }
+
         const session = state.sessions.find((item) => item.id === setMatch[1]);
 
         if (!session) {
@@ -273,6 +371,10 @@ export async function mockFitrackerApi(
       );
 
       if (completeMatch && method === "POST") {
+        if (await fail(route, "completeWorkoutSession")) {
+          return;
+        }
+
         const session = state.sessions.find(
           (item) => item.id === completeMatch[1],
         );
@@ -297,6 +399,10 @@ export async function mockFitrackerApi(
       );
 
       if (feedbackMatch && method === "POST") {
+        if (await fail(route, "feedback")) {
+          return;
+        }
+
         const session = state.sessions.find(
           (item) => item.id === feedbackMatch[1],
         );

@@ -355,4 +355,62 @@ describe("session runner page", () => {
 
     expect(await screen.findByText("Could not finish workout.")).toBeVisible();
   });
+
+  test("clamps persisted exercise state to the final exercise index", async () => {
+    window.localStorage.setItem(
+      "fitracker.runner.session_foundation_a",
+      JSON.stringify({
+        currentExerciseIndex: 99,
+        exerciseTimerEndsAt: null,
+        exerciseTimerExerciseId: null,
+        exerciseTimerSeconds: null,
+        restTimerEndsAt: null,
+        updatedAt: Date.now(),
+      }),
+    );
+    mocks.getWorkoutSession.mockResolvedValueOnce(buildWorkoutSession());
+    mocks.getWorkoutDetail.mockResolvedValueOnce(buildWorkoutTemplateDetail());
+    mocks.getExerciseDetail.mockImplementation(async (exerciseId: string) =>
+      buildExerciseDetail({
+        id: exerciseId,
+        instructions:
+          exerciseId === "exercise_split_stance_row"
+            ? "Step back and row."
+            : "Brace and squat.",
+        name:
+          exerciseId === "exercise_split_stance_row"
+            ? "Split stance row"
+            : "Goblet squat",
+        slug:
+          exerciseId === "exercise_split_stance_row"
+            ? "split-stance-row"
+            : "goblet-squat",
+        trackingMode:
+          exerciseId === "exercise_split_stance_row" ? "mixed" : "reps",
+      }),
+    );
+
+    render(<SessionRunnerPage />);
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Split stance row",
+      }),
+    ).toBeVisible();
+  });
+
+  test("redirects unauthenticated athletes to login", async () => {
+    mocks.session = {
+      authenticated: false,
+      session: null,
+      user: null,
+    };
+
+    render(<SessionRunnerPage />);
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/login");
+    });
+  });
 });

@@ -151,6 +151,21 @@ describe("home page", () => {
     expect(await screen.findByText("Could not reach today.")).toBeVisible();
   });
 
+  test("shows an empty history state when no recent sessions exist", async () => {
+    mocks.getTodayWorkouts.mockResolvedValueOnce(
+      buildTodayWorkoutsResponse({ items: [] }),
+    );
+    mocks.listWorkoutSessions
+      .mockResolvedValueOnce(buildWorkoutSessionListResponse([]))
+      .mockResolvedValueOnce(buildWorkoutSessionListResponse([]));
+
+    render(<HomePage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "No recent sessions" }),
+    ).toBeVisible();
+  });
+
   test("resumes an active session from the dashboard card", async () => {
     const user = userEvent.setup();
     const activeSession = buildWorkoutSession({ id: "session_resume" });
@@ -165,5 +180,29 @@ describe("home page", () => {
     await user.click(await screen.findByRole("button", { name: "Resume" }));
 
     expect(mocks.push).toHaveBeenCalledWith("/sessions/session_resume");
+  });
+
+  test("prefers the active-session query for the dashboard card over recent history", async () => {
+    const activeSession = buildWorkoutSession({ id: "session_live" });
+    const recentOnly = buildWorkoutSession({
+      id: "session_recent_only",
+      status: "completed",
+    });
+
+    mocks.getTodayWorkouts.mockResolvedValueOnce(buildTodayWorkoutsResponse());
+    mocks.listWorkoutSessions
+      .mockResolvedValueOnce(buildWorkoutSessionListResponse([activeSession]))
+      .mockResolvedValueOnce(
+        buildWorkoutSessionListResponse([recentOnly, activeSession]),
+      );
+
+    render(<HomePage />);
+
+    await screen.findByRole("button", { name: "Resume" });
+
+    expect(
+      screen.getByRole("heading", { name: "Assigned workouts" }),
+    ).toBeVisible();
+    expect(screen.getByText("In progress")).toBeVisible();
   });
 });
