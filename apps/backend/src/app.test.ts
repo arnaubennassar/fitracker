@@ -56,7 +56,7 @@ test("GET /health reports a reachable database", async () => {
 
     assert.equal(payload.status, "ok");
     assert.equal(payload.database.reachable, true);
-    assert.equal(payload.database.migrationCount, 5);
+    assert.equal(payload.database.migrationCount, 6);
   } finally {
     await app.close();
     context.cleanup();
@@ -510,7 +510,11 @@ test("user session, workouts, sets, completion, and feedback flow", async () => 
     assert.equal(workouts.statusCode, 200);
     const workoutsPayload = workouts.json();
     assert.ok(workoutsPayload.items.length >= 1);
-    const firstTemplateId = workoutsPayload.items[0].workoutTemplate.id;
+    const activeAssignment = workoutsPayload.items.find(
+      (assignment: { isActive: boolean }) => assignment.isActive,
+    );
+    assert.ok(activeAssignment);
+    const firstTemplateId = activeAssignment.workoutTemplate.id;
 
     const detail = await app.inject({
       method: "GET",
@@ -534,7 +538,7 @@ test("user session, workouts, sets, completion, and feedback flow", async () => 
       headers,
       payload: {
         workoutTemplateId: firstTemplateId,
-        assignmentId: workoutsPayload.items[0].id,
+        assignmentId: activeAssignment.id,
         notes: "Starting now",
       },
     });
@@ -666,6 +670,258 @@ test("user session, workouts, sets, completion, and feedback flow", async () => 
     });
     assert.equal(logout.statusCode, 200);
     assert.equal(logout.json().authenticated, false);
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("user routes reject unassigned workouts and exercises", async () => {
+  const context = createTestEnv();
+  const testEnv = loadEnv({
+    DATABASE_PATH: context.env.DATABASE_PATH,
+    NODE_ENV: "test",
+    ADMIN_SEED_TOKEN: context.env.ADMIN_SEED_TOKEN,
+    ADMIN_SEED_TOKEN_NAME: context.env.ADMIN_SEED_TOKEN_NAME,
+    WEBAUTHN_ORIGIN: "http://localhost:3000",
+    WEBAUTHN_RP_ID: "localhost",
+    WEBAUTHN_RP_NAME: "Fitracker Test",
+  });
+  const app = buildApp({ env: testEnv });
+  seedDatabase(app.db, testEnv);
+  const authenticator = createTestAuthenticator();
+  const origin = "http://localhost:3000";
+
+  try {
+    const registerOptions = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/register/options",
+      headers: { origin, host: "localhost:3000" },
+      payload: { userId: "user_arnau", displayName: "Arnau" },
+    });
+
+    const registerVerify = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/register/verify",
+      headers: { origin, host: "localhost:3000" },
+      payload: {
+        challengeId: registerOptions.json().challengeId,
+        credentialId: "cred_test_hardening",
+        clientDataJSON: encodeClientDataJSON({
+          type: "webauthn.create",
+          challenge: registerOptions.json().publicKey.challenge,
+          origin,
+        }),
+        publicKey: authenticator.publicKeyBase64Url,
+        transports: ["internal"],
+      },
+    });
+
+    const sessionCookie = parseSessionCookie(
+      registerVerify.headers["set-cookie"] as string[] | string | undefined,
+    );
+    assert.ok(sessionCookie);
+    const headers = { cookie: `fitracker_session=${sessionCookie}` };
+
+    const createUnassignedSession = await app.inject({
+      method: "POST",
+      url: "/api/v1/me/workout-sessions",
+      headers,
+      payload: {
+        workoutTemplateId: "template_conditioning_reset",
+      },
+    });
+
+    assert.equal(createUnassignedSession.statusCode, 404);
+    assert.equal(
+      createUnassignedSession.json().code,
+      "WORKOUT_TEMPLATE_NOT_ASSIGNED",
+    );
+
+    app.db
+      .prepare(
+        `
+          INSERT INTO users (id, display_name, status, created_at, updated_at)
+          VALUES ('user_other', 'Other User', 'active', ?, ?)
+        `,
+      )
+      .run("2026-04-20T09:00:00.000Z", "2026-04-20T09:00:00.000Z");
+    app.db
+      .prepare(
+        `
+          INSERT INTO exercises (
+            id,
+            category_id,
+            slug,
+            name,
+            description,
+            instructions,
+            equipment,
+            tracking_mode,
+            difficulty,
+            primary_muscles,
+            secondary_muscles,
+            is_active,
+            created_at,
+            updated_at
+          )
+          VALUES (?, 'cat_strength', ?, ?, NULL, ?, '[]', 'reps', 'beginner', '[]', '[]', 1, ?, ?)
+        `,
+      )
+      .run(
+        "exercise_private_other",
+        "private-other",
+        "Private Other Exercise",
+        "Only assigned to another user.",
+        "2026-04-20T09:00:00.000Z",
+        "2026-04-20T09:00:00.000Z",
+      );
+    app.db
+      .prepare(
+        `
+          INSERT INTO workout_templates (
+            id,
+            slug,
+            name,
+            description,
+            goal,
+            estimated_duration_min,
+            difficulty,
+            is_active,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, NULL, NULL, 20, 'beginner', 1, ?, ?)
+        `,
+      )
+      .run(
+        "template_private_other",
+        "private-other-template",
+        "Private Other Template",
+        "2026-04-20T09:00:00.000Z",
+        "2026-04-20T09:00:00.000Z",
+      );
+    app.db
+      .prepare(
+        `
+          INSERT INTO workout_template_exercises (
+            id,
+            workout_template_id,
+            exercise_id,
+            sequence,
+            block_label,
+            instruction_override,
+            target_sets,
+            target_reps,
+            target_reps_min,
+            target_reps_max,
+            target_weight,
+            target_weight_unit,
+            target_duration_seconds,
+            target_distance_meters,
+            rest_seconds,
+            tempo,
+            rpe_target,
+            rir_target,
+            is_optional
+          )
+          VALUES (?, ?, ?, 1, 'main', NULL, 3, NULL, 8, 10, NULL, NULL, NULL, NULL, 60, NULL, NULL, NULL, 0)
+        `,
+      )
+      .run(
+        "template_private_other_exercise",
+        "template_private_other",
+        "exercise_private_other",
+      );
+    app.db
+      .prepare(
+        `
+          INSERT INTO workout_assignments (
+            id,
+            user_id,
+            workout_template_id,
+            assigned_by,
+            starts_on,
+            ends_on,
+            schedule_notes,
+            frequency_per_week,
+            is_active,
+            created_at,
+            updated_at
+          )
+          VALUES (?, 'user_other', ?, 'fitnaista', '2026-04-20', NULL, NULL, 1, 1, ?, ?)
+        `,
+      )
+      .run(
+        "assignment_private_other",
+        "template_private_other",
+        "2026-04-20T09:00:00.000Z",
+        "2026-04-20T09:00:00.000Z",
+      );
+
+    const getUnassignedExercise = await app.inject({
+      method: "GET",
+      url: "/api/v1/me/exercises/exercise_private_other",
+      headers,
+    });
+
+    assert.equal(getUnassignedExercise.statusCode, 404);
+    assert.equal(getUnassignedExercise.json().code, "EXERCISE_NOT_FOUND");
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("admin mutations write audit logs", async () => {
+  const context = createTestEnv();
+  const app = buildApp({ env: context.env });
+  seedDatabase(app.db, context.env);
+
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/categories",
+      headers: adminHeaders(context.env.ADMIN_SEED_TOKEN),
+      payload: {
+        name: "Audit Recovery",
+        description: "Tracked for audit coverage.",
+      },
+    });
+
+    assert.equal(response.statusCode, 201);
+
+    const auditRows = app.db
+      .prepare(
+        `
+          SELECT admin_token_name, method, route_path, request_path, status_code, resource_type, request_body
+          FROM admin_audit_logs
+          ORDER BY created_at DESC
+        `,
+      )
+      .all() as Array<{
+      admin_token_name: string;
+      method: string;
+      request_body: string | null;
+      request_path: string;
+      resource_type: string | null;
+      route_path: string;
+      status_code: number;
+    }>;
+
+    assert.equal(auditRows.length, 1);
+    const [firstAuditRow] = auditRows;
+    assert.ok(firstAuditRow);
+    assert.equal(
+      firstAuditRow.admin_token_name,
+      context.env.ADMIN_SEED_TOKEN_NAME,
+    );
+    assert.equal(firstAuditRow.method, "POST");
+    assert.equal(firstAuditRow.route_path, "/api/v1/admin/categories");
+    assert.equal(firstAuditRow.request_path, "/api/v1/admin/categories");
+    assert.equal(firstAuditRow.status_code, 201);
+    assert.equal(firstAuditRow.resource_type, "categories");
+    assert.match(firstAuditRow.request_body ?? "", /Audit Recovery/);
   } finally {
     await app.close();
     context.cleanup();

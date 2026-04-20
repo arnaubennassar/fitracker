@@ -828,19 +828,24 @@ async function getMyExerciseDetail(
   const row = request.server.db
     .prepare(
       `
-        SELECT
+        SELECT DISTINCT
           exercises.*,
           exercise_categories.id AS category_id,
           exercise_categories.name AS category_name
         FROM exercises
         INNER JOIN exercise_categories
           ON exercise_categories.id = exercises.category_id
+        INNER JOIN workout_template_exercises
+          ON workout_template_exercises.exercise_id = exercises.id
+        INNER JOIN workout_assignments
+          ON workout_assignments.workout_template_id = workout_template_exercises.workout_template_id
         WHERE exercises.id = ?
+          AND workout_assignments.user_id = ?
           AND exercises.is_active = 1
         LIMIT 1
       `,
     )
-    .get(params.exerciseId) as ExerciseRow | undefined;
+    .get(params.exerciseId, userId) as ExerciseRow | undefined;
 
   if (!row) {
     return sendNotFound(reply, "EXERCISE_NOT_FOUND", "Exercise not found.");
@@ -873,6 +878,27 @@ async function createMyWorkoutSession(
       reply,
       "WORKOUT_TEMPLATE_NOT_FOUND",
       "Workout template not found.",
+    );
+  }
+
+  const assignmentForTemplate = request.server.db
+    .prepare(
+      `
+        SELECT id
+        FROM workout_assignments
+        WHERE user_id = ?
+          AND workout_template_id = ?
+          AND is_active = 1
+        LIMIT 1
+      `,
+    )
+    .get(userId, body.workoutTemplateId) as { id: string } | undefined;
+
+  if (!assignmentForTemplate) {
+    return sendNotFound(
+      reply,
+      "WORKOUT_TEMPLATE_NOT_ASSIGNED",
+      "Workout template is not assigned to the current user.",
     );
   }
 
