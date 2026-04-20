@@ -53,6 +53,11 @@ type UserRow = {
   status: string;
 };
 
+type ChallengeMetadata = {
+  displayName?: string;
+  userId?: string;
+};
+
 const authenticatorTransportSchema = {
   type: "string",
   enum: ["ble", "hybrid", "internal", "nfc", "smart-card", "usb"],
@@ -304,7 +309,6 @@ function createStoredChallenge(
   options: {
     flowType: "passkey_login" | "passkey_register";
     metadata?: Record<string, unknown>;
-    userId?: string;
   },
 ) {
   cleanupExpiredChallenges(request);
@@ -334,7 +338,7 @@ function createStoredChallenge(
     )
     .run(
       id,
-      options.userId ?? null,
+      null,
       options.flowType,
       challenge,
       JSON.stringify(options.metadata ?? {}),
@@ -391,6 +395,22 @@ function toAuthDescriptor(row: {
   };
 }
 
+function readChallengeMetadata(
+  challenge: Pick<AuthChallengeRow, "metadata">,
+): ChallengeMetadata {
+  try {
+    const parsed = JSON.parse(challenge.metadata) as ChallengeMetadata | null;
+
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
 function mapAuthResponse(request: FastifyRequest) {
   const session = resolveUserSession(request);
 
@@ -439,8 +459,8 @@ async function createRegisterOptions(
     flowType: "passkey_register",
     metadata: {
       displayName: body.displayName,
+      userId: body.userId,
     },
-    userId: body.userId,
   });
   const passkeys = getPasskeysForUser(request, body.userId);
 
@@ -483,7 +503,7 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
     "passkey_register",
   );
 
-  if (!challenge || !challenge.user_id) {
+  if (!challenge) {
     return sendBadRequest(
       reply,
       "PASSKEY_REGISTER_CHALLENGE_INVALID",
@@ -505,11 +525,19 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
     );
   }
 
-  const metadata = JSON.parse(challenge.metadata) as {
-    displayName?: string;
-  };
+  const metadata = readChallengeMetadata(challenge);
+  const targetUserId = metadata.userId ?? challenge.user_id;
+
+  if (!targetUserId) {
+    return sendBadRequest(
+      reply,
+      "PASSKEY_REGISTER_CHALLENGE_INVALID",
+      "The registration challenge is invalid or expired.",
+    );
+  }
+
   const now = nowIsoString();
-  const existingUser = getActiveUser(request, challenge.user_id);
+  const existingUser = getActiveUser(request, targetUserId);
 
   if (existingUser && existingUser.status !== "active") {
     return sendConflict(
@@ -529,12 +557,7 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
           updated_at = excluded.updated_at
       `,
     )
-    .run(
-      challenge.user_id,
-      metadata.displayName ?? challenge.user_id,
-      now,
-      now,
-    );
+    .run(targetUserId, metadata.displayName ?? targetUserId, now, now);
 
   try {
     request.server.db
@@ -555,7 +578,7 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
       )
       .run(
         createId("passkey"),
-        challenge.user_id,
+        targetUserId,
         body.credentialId,
         body.publicKey,
         JSON.stringify(body.transports ?? []),
@@ -578,8 +601,8 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
 
   markChallengeUsed(request, challenge.id);
 
-  const session = createUserSession(request, reply, challenge.user_id);
-  const user = getActiveUser(request, challenge.user_id);
+  const session = createUserSession(request, reply, targetUserId);
+  const user = getActiveUser(request, targetUserId);
 
   return {
     authenticated: true,
@@ -589,9 +612,8 @@ async function verifyRegister(request: FastifyRequest, reply: FastifyReply) {
       lastSeenAt: now,
     },
     user: {
-      displayName:
-        user?.display_name ?? metadata.displayName ?? challenge.user_id,
-      id: challenge.user_id,
+      displayName: user?.display_name ?? metadata.displayName ?? targetUserId,
+      id: targetUserId,
       status: "active",
     },
   };
@@ -602,12 +624,6 @@ async function createLoginOptions(
   reply: FastifyReply,
 ) {
   const body = (request.body as { userId?: string } | undefined) ?? {};
-  const challenge = createStoredChallenge(request, {
-    flowType: "passkey_login",
-    metadata: body.userId ? { userId: body.userId } : {},
-    ...(body.userId ? { userId: body.userId } : {}),
-  });
-
   let allowCredentials: Array<{
     credential_id: string;
     transports: string;
@@ -638,6 +654,11 @@ async function createLoginOptions(
       );
     }
   }
+
+  const challenge = createStoredChallenge(request, {
+    flowType: "passkey_login",
+    metadata: body.userId ? { userId: body.userId } : {},
+  });
 
   return {
     challengeId: challenge.challengeId,
@@ -701,7 +722,10 @@ async function verifyLogin(request: FastifyRequest, reply: FastifyReply) {
     );
   }
 
-  if (challenge.user_id && challenge.user_id !== passkey.user_id) {
+  const metadata = readChallengeMetadata(challenge);
+  const requestedUserId = metadata.userId ?? challenge.user_id;
+
+  if (requestedUserId && requestedUserId !== passkey.user_id) {
     return sendBadRequest(
       reply,
       "PASSKEY_LOGIN_CREDENTIAL_MISMATCH",

@@ -433,6 +433,158 @@ function createTestAuthenticator() {
   };
 }
 
+test("passkey registration provisions a new user and discoverable login succeeds", async () => {
+  const context = createTestEnv();
+  const testEnv = loadEnv({
+    DATABASE_PATH: context.env.DATABASE_PATH,
+    NODE_ENV: "test",
+    ADMIN_SEED_TOKEN: context.env.ADMIN_SEED_TOKEN,
+    ADMIN_SEED_TOKEN_NAME: context.env.ADMIN_SEED_TOKEN_NAME,
+    WEBAUTHN_ORIGIN: "http://localhost:3000",
+    WEBAUTHN_RP_ID: "localhost",
+    WEBAUTHN_RP_NAME: "Fitracker Test",
+  });
+  const app = buildApp({ env: testEnv });
+  seedDatabase(app.db, testEnv);
+  const authenticator = createTestAuthenticator();
+  const origin = "http://localhost:3000";
+  const rpId = "localhost";
+  const userId = "user_new_passkey";
+  const credentialId = "cred_test_new_user";
+
+  try {
+    const registerOptions = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/register/options",
+      headers: { origin, host: "localhost:3000" },
+      payload: { userId, displayName: "New Passkey User" },
+    });
+
+    assert.equal(registerOptions.statusCode, 200);
+
+    const registerVerify = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/register/verify",
+      headers: { origin, host: "localhost:3000" },
+      payload: {
+        challengeId: registerOptions.json().challengeId,
+        credentialId,
+        clientDataJSON: encodeClientDataJSON({
+          type: "webauthn.create",
+          challenge: registerOptions.json().publicKey.challenge,
+          origin,
+        }),
+        publicKey: authenticator.publicKeyBase64Url,
+        transports: ["internal"],
+      },
+    });
+
+    assert.equal(registerVerify.statusCode, 200);
+    assert.equal(registerVerify.json().authenticated, true);
+    assert.equal(registerVerify.json().user.id, userId);
+
+    const createdUser = app.db
+      .prepare(
+        `
+          SELECT id, display_name, status
+          FROM users
+          WHERE id = ?
+          LIMIT 1
+        `,
+      )
+      .get(userId) as
+      | { display_name: string; id: string; status: string }
+      | undefined;
+
+    assert.ok(createdUser);
+    assert.equal(createdUser.display_name, "New Passkey User");
+    assert.equal(createdUser.status, "active");
+
+    const loginOptions = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/login/options",
+      headers: { origin, host: "localhost:3000" },
+      payload: {},
+    });
+
+    assert.equal(loginOptions.statusCode, 200);
+    assert.deepEqual(loginOptions.json().publicKey.allowCredentials, []);
+
+    const authenticatorData = buildAuthenticatorData(rpId, 1);
+    const loginClientData = encodeClientDataJSON({
+      type: "webauthn.get",
+      challenge: loginOptions.json().publicKey.challenge,
+      origin,
+    });
+    const signature = signAssertion(
+      authenticator.privateKey,
+      authenticatorData,
+      loginClientData,
+    );
+
+    const loginVerify = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/login/verify",
+      headers: { origin, host: "localhost:3000" },
+      payload: {
+        challengeId: loginOptions.json().challengeId,
+        credentialId,
+        authenticatorData: authenticatorData.toString("base64url"),
+        clientDataJSON: loginClientData,
+        signature: signature.toString("base64url"),
+      },
+    });
+
+    assert.equal(loginVerify.statusCode, 200);
+    assert.equal(loginVerify.json().authenticated, true);
+    assert.equal(loginVerify.json().user.id, userId);
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("passkey login options reject unknown users without storing a challenge", async () => {
+  const context = createTestEnv();
+  const testEnv = loadEnv({
+    DATABASE_PATH: context.env.DATABASE_PATH,
+    NODE_ENV: "test",
+    ADMIN_SEED_TOKEN: context.env.ADMIN_SEED_TOKEN,
+    ADMIN_SEED_TOKEN_NAME: context.env.ADMIN_SEED_TOKEN_NAME,
+    WEBAUTHN_ORIGIN: "http://localhost:3000",
+    WEBAUTHN_RP_ID: "localhost",
+    WEBAUTHN_RP_NAME: "Fitracker Test",
+  });
+  const app = buildApp({ env: testEnv });
+  seedDatabase(app.db, testEnv);
+
+  try {
+    const loginOptions = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/passkey/login/options",
+      headers: { origin: "http://localhost:3000", host: "localhost:3000" },
+      payload: { userId: "user_missing" },
+    });
+
+    assert.equal(loginOptions.statusCode, 404);
+    assert.equal(loginOptions.json().code, "USER_NOT_FOUND");
+
+    const storedChallenges = app.db
+      .prepare(
+        `
+          SELECT COUNT(*) AS count
+          FROM auth_challenges
+        `,
+      )
+      .get() as { count: number };
+
+    assert.equal(storedChallenges.count, 0);
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
 test("user session, workouts, sets, completion, and feedback flow", async () => {
   const context = createTestEnv();
   const testEnv = loadEnv({
