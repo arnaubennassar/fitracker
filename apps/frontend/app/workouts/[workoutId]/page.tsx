@@ -1,13 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MediaGallery } from "../../_components/media-gallery";
-import { ApiError, getExerciseDetail, getWorkoutDetail } from "../../_lib/api";
+import {
+  ApiError,
+  createWorkoutSession,
+  getExerciseDetail,
+  getTodayWorkouts,
+  getWorkoutDetail,
+  listWorkoutSessions,
+} from "../../_lib/api";
 import { useForegroundRefresh } from "../../_lib/foreground-refresh";
-import type { ExerciseDetail, WorkoutTemplateDetail } from "../../_lib/types";
+import type {
+  ExerciseDetail,
+  WorkoutAssignment,
+  WorkoutSessionDetail,
+  WorkoutTemplateDetail,
+} from "../../_lib/types";
 import { describeExerciseTarget, titleCase } from "../../_lib/workout";
 import { useSession } from "../../providers";
 
@@ -16,6 +29,9 @@ export default function WorkoutDetailPage() {
   const router = useRouter();
   const { loading, session } = useSession();
   const [workout, setWorkout] = useState<WorkoutTemplateDetail | null>(null);
+  const [assignment, setAssignment] = useState<WorkoutAssignment | null>(null);
+  const [activeSession, setActiveSession] =
+    useState<WorkoutSessionDetail | null>(null);
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(
     null,
   );
@@ -23,6 +39,7 @@ export default function WorkoutDetailPage() {
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const loadRequestIdRef = useRef(0);
 
   const loadWorkout = useCallback(async () => {
@@ -34,13 +51,27 @@ export default function WorkoutDetailPage() {
     loadRequestIdRef.current = requestId;
 
     try {
-      const detail = await getWorkoutDetail(params.workoutId);
+      const [detail, today, active] = await Promise.all([
+        getWorkoutDetail(params.workoutId),
+        getTodayWorkouts(),
+        listWorkoutSessions({ limit: 10, status: "in_progress" }),
+      ]);
 
       if (loadRequestIdRef.current !== requestId) {
         return;
       }
 
       setWorkout(detail);
+      setAssignment(
+        today.items.find(
+          (item) => item.workoutTemplate.id === params.workoutId,
+        ) ?? null,
+      );
+      setActiveSession(
+        active.items.find(
+          (item) => item.workoutTemplate.id === params.workoutId,
+        ) ?? null,
+      );
       setExpandedExerciseId(
         (current) => current ?? detail.exercises[0]?.exercise.id ?? null,
       );
@@ -132,6 +163,42 @@ export default function WorkoutDetailPage() {
           <h1 className="home-page-title">{workout.name}</h1>
         </div>
         {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
+        <div className="action-row">
+          {activeSession ? (
+            <Link
+              className="primary-button"
+              href={`/sessions/${activeSession.id}`}
+            >
+              Resume current session
+            </Link>
+          ) : (
+            <button
+              className="primary-button"
+              disabled={starting}
+              onClick={async () => {
+                setStarting(true);
+                try {
+                  const created = await createWorkoutSession({
+                    assignmentId: assignment?.id ?? null,
+                    workoutTemplateId: workout.id,
+                  });
+                  router.push(`/sessions/${created.id}`);
+                } catch (error) {
+                  setErrorMessage(
+                    error instanceof ApiError
+                      ? error.message
+                      : "Could not start the workout.",
+                  );
+                } finally {
+                  setStarting(false);
+                }
+              }}
+              type="button"
+            >
+              {starting ? "Starting..." : "Start workout"}
+            </button>
+          )}
+        </div>
         <div className="list-stack">
           {workout.exercises.map((exercise) => {
             const expanded = expandedExerciseId === exercise.exercise.id;

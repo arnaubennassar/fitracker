@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { mockFitrackerApi } from "./helpers/mock-api";
 
-test("shows only the exercise plan and home control on the workout page", async ({
+test("shows the minimal workout layout and starts a workout", async ({
   page,
 }) => {
   await mockFitrackerApi(page);
@@ -17,7 +17,8 @@ test("shows only the exercise plan and home control on the workout page", async 
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(
     0,
   );
-  await expect(page.getByRole("button", { name: "Start workout" })).toHaveCount(
-    0,
-  );
+
+  await page.getByRole("button", { name: "Start workout" }).click();
+
+  await expect(page).toHaveURL(/\/sessions\/session_created_1$/);
 });
