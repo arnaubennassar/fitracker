@@ -12,6 +12,7 @@ import type {
 } from "fastify";
 import { z } from "zod";
 
+import { readMcpAdminToken } from "../lib/mcp-admin-auth.js";
 import type { AppRouteDefinition } from "./registry.js";
 
 type JsonSchema = Record<string, unknown>;
@@ -55,6 +56,34 @@ function buildNullUnion(values: z.ZodTypeAny[]) {
   ]);
 }
 
+function buildLiteralUnion(values: unknown[]) {
+  const literals = values
+    .filter(
+      (value): value is boolean | number | string | null =>
+        value === null ||
+        typeof value === "boolean" ||
+        typeof value === "number" ||
+        typeof value === "string",
+    )
+    .map((value) => z.literal(value));
+
+  const [first, second, ...rest] = literals;
+
+  if (!first) {
+    return null;
+  }
+
+  if (!second) {
+    return first;
+  }
+
+  return z.union([first, second, ...rest] as unknown as [
+    z.ZodLiteral<boolean | number | string | null>,
+    z.ZodLiteral<boolean | number | string | null>,
+    ...z.ZodLiteral<boolean | number | string | null>[],
+  ]);
+}
+
 function applyCommonSchemaMetadata(
   zodSchema: z.ZodTypeAny,
   jsonSchema: JsonSchema,
@@ -75,6 +104,14 @@ function applyCommonSchemaMetadata(
 }
 
 function jsonSchemaToZod(schema: JsonSchema): z.ZodTypeAny {
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+    const enumSchema = buildLiteralUnion(schema.enum);
+
+    if (enumSchema) {
+      return applyCommonSchemaMetadata(enumSchema, schema);
+    }
+  }
+
   if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
     const variants = schema.anyOf
       .filter(isJsonSchema)
@@ -187,6 +224,14 @@ function getAdminRoutes(app: FastifyInstance) {
   );
 }
 
+function getSchemaPropertyNames(schema: unknown) {
+  if (!isJsonSchema(schema) || !isJsonSchema(schema.properties)) {
+    return [];
+  }
+
+  return Object.keys(schema.properties);
+}
+
 function buildToolDescription(route: AppRouteDefinition) {
   const argumentParts = [
     route.schema.params ? "`params`" : null,
@@ -199,7 +244,31 @@ function buildToolDescription(route: AppRouteDefinition) {
       ? `Pass request fields using ${argumentParts.join(", ")}.`
       : "This tool does not take custom arguments.";
 
-  return `${route.summary} Maps to ${route.method} ${route.url}. ${argumentSummary}`;
+  const hints = [
+    getSchemaPropertyNames(route.schema.params).length > 0
+      ? `Path keys must match exactly: ${getSchemaPropertyNames(
+          route.schema.params,
+        )
+          .map((name) => `\`params.${name}\``)
+          .join(", ")}.`
+      : null,
+    getSchemaPropertyNames(route.schema.querystring).length > 0
+      ? `Query keys: ${getSchemaPropertyNames(route.schema.querystring)
+          .map((name) => `\`query.${name}\``)
+          .join(", ")}.`
+      : null,
+    isJsonSchema(route.schema.body) &&
+    typeof route.schema.body.description === "string"
+      ? route.schema.body.description
+      : null,
+  ].filter((value): value is string => value !== null);
+
+  return [
+    route.summary,
+    `Maps to ${route.method} ${route.url}.`,
+    argumentSummary,
+    ...hints,
+  ].join(" ");
 }
 
 function buildQueryString(query: Record<string, unknown> | undefined) {
@@ -285,15 +354,15 @@ async function invokeAdminRoute(
   route: AppRouteDefinition,
   args: McpToolArguments,
 ) {
+  const adminToken =
+    readMcpAdminToken(app.config) ?? app.config.ADMIN_SEED_TOKEN;
   const method = route.method === "SEARCH" ? "GET" : route.method;
   const requestOptions = {
     ...(route.schema.body && args.body !== undefined
       ? { payload: args.body as InjectOptions["payload"] }
       : {}),
     headers: {
-      authorization: `Bearer ${
-        app.config.MCP_ADMIN_TOKEN ?? app.config.ADMIN_SEED_TOKEN
-      }`,
+      authorization: `Bearer ${adminToken}`,
     },
     method: method as Exclude<HTTPMethods, "SEARCH">,
     url: buildRouteUrl(route, args.params, args.query),

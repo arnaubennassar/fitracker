@@ -117,8 +117,8 @@ export function buildDocsHtml(env: AppEnv) {
             <p class="meta"><code>${env.API_BASE_PATH}</code></p>
           </article>
           <article class="meta-card">
-            <p class="eyebrow">Seed admin token</p>
-            <p class="meta">Read <code>ADMIN_SEED_TOKEN</code> from the backend env.</p>
+            <p class="eyebrow">MCP admin auth</p>
+            <p class="meta">Run <code>set-admin-auth</code> or set <code>MCP_ADMIN_TOKEN</code>.</p>
           </article>
         </div>
       </section>

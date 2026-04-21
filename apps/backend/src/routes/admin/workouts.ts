@@ -101,6 +101,11 @@ type WorkoutTemplateExerciseBody = {
   tempo?: string | null;
 };
 
+const trackingModeDescription =
+  "Allowed values: distance, mixed, reps, time. Use the exact enum values from the exercise record.";
+const optionalTargetFieldDescription =
+  "Optional. Omit this field or pass null to leave it unset.";
+
 const workoutTemplateSchema = {
   type: "object",
   required: [
@@ -179,6 +184,7 @@ const workoutTemplateExerciseSchema = {
         trackingMode: {
           type: "string",
           enum: ["distance", "mixed", "reps", "time"],
+          description: trackingModeDescription,
         },
         difficulty: {
           type: "string",
@@ -220,11 +226,19 @@ const workoutTemplateDetailSchema = {
 
 const workoutTemplateBodySchema = {
   type: "object",
+  description:
+    "Creates a workout template. Embedded exercises in body.exercises are supported and are created atomically with the template: if any exercise insert fails, no template or exercises are created.",
   required: ["slug", "name"],
   additionalProperties: false,
   properties: {
     id: { type: "string" },
-    slug: { type: "string", minLength: 2, maxLength: 120 },
+    slug: {
+      type: "string",
+      minLength: 2,
+      maxLength: 120,
+      description:
+        "Unique template slug. Reusing an existing slug returns a conflict.",
+    },
     name: { type: "string", minLength: 2, maxLength: 120 },
     description: {
       anyOf: [{ type: "string", maxLength: 1000 }, { type: "null" }],
@@ -242,28 +256,82 @@ const workoutTemplateBodySchema = {
     isActive: { type: "boolean" },
     exercises: {
       type: "array",
+      description:
+        "Optional ordered exercises to create with the template. Each item uses an existing exerciseId. This nested create is atomic.",
       items: {
         type: "object",
         additionalProperties: false,
         required: ["exerciseId", "sequence", "blockLabel"],
         properties: {
           id: { type: "string" },
-          exerciseId: { type: "string", minLength: 1 },
-          sequence: { type: "integer", minimum: 1 },
-          blockLabel: { type: "string", minLength: 1 },
+          exerciseId: {
+            type: "string",
+            minLength: 1,
+            description:
+              "Existing exercise id. Create or look up the exercise first; this route does not create exercises.",
+          },
+          sequence: {
+            type: "integer",
+            minimum: 1,
+            description:
+              "1-based order inside the template. Must be unique per workout template.",
+          },
+          blockLabel: {
+            type: "string",
+            minLength: 1,
+            description:
+              "Human-readable block label, for example Warmup or Main.",
+          },
           instructionOverride: nullableStringSchema,
-          targetSets: nullableIntegerSchema,
-          targetReps: nullableIntegerSchema,
-          targetRepsMin: nullableIntegerSchema,
-          targetRepsMax: nullableIntegerSchema,
-          targetWeight: nullableNumberSchema,
-          targetWeightUnit: nullableStringSchema,
-          targetDurationSeconds: nullableIntegerSchema,
-          targetDistanceMeters: nullableNumberSchema,
-          restSeconds: nullableIntegerSchema,
+          targetSets: {
+            ...nullableIntegerSchema,
+            description: optionalTargetFieldDescription,
+          },
+          targetReps: {
+            ...nullableIntegerSchema,
+            description:
+              "Optional fixed rep target. Use this or a min/max rep range, not both. Omit or pass null when using targetRepsMin/targetRepsMax.",
+          },
+          targetRepsMin: {
+            ...nullableIntegerSchema,
+            description:
+              "Optional rep range minimum. Pair with targetRepsMax. Omit or pass null when using targetReps.",
+          },
+          targetRepsMax: {
+            ...nullableIntegerSchema,
+            description:
+              "Optional rep range maximum. Pair with targetRepsMin. Omit or pass null when using targetReps.",
+          },
+          targetWeight: {
+            ...nullableNumberSchema,
+            description: optionalTargetFieldDescription,
+          },
+          targetWeightUnit: {
+            ...nullableStringSchema,
+            description:
+              "Optional weight unit such as kg or lb. Omit or pass null when targetWeight is unset.",
+          },
+          targetDurationSeconds: {
+            ...nullableIntegerSchema,
+            description: optionalTargetFieldDescription,
+          },
+          targetDistanceMeters: {
+            ...nullableNumberSchema,
+            description: optionalTargetFieldDescription,
+          },
+          restSeconds: {
+            ...nullableIntegerSchema,
+            description: optionalTargetFieldDescription,
+          },
           tempo: nullableStringSchema,
-          rpeTarget: nullableIntegerSchema,
-          rirTarget: nullableIntegerSchema,
+          rpeTarget: {
+            ...nullableIntegerSchema,
+            description: optionalTargetFieldDescription,
+          },
+          rirTarget: {
+            ...nullableIntegerSchema,
+            description: optionalTargetFieldDescription,
+          },
           isOptional: { type: "boolean" },
         },
       },
@@ -273,25 +341,78 @@ const workoutTemplateBodySchema = {
 
 const workoutTemplateExerciseBodySchema = {
   type: "object",
+  description:
+    "Adds one ordered exercise to an existing workout template identified by params.workoutId.",
   required: ["exerciseId", "sequence", "blockLabel"],
   additionalProperties: false,
   properties: {
-    exerciseId: { type: "string", minLength: 1 },
-    sequence: { type: "integer", minimum: 1 },
-    blockLabel: { type: "string", minLength: 1 },
+    exerciseId: {
+      type: "string",
+      minLength: 1,
+      description:
+        "Existing exercise id. This route does not create exercises or infer trackingMode.",
+    },
+    sequence: {
+      type: "integer",
+      minimum: 1,
+      description:
+        "1-based order inside the template. Must be unique per workout template.",
+    },
+    blockLabel: {
+      type: "string",
+      minLength: 1,
+      description: "Human-readable block label, for example Warmup or Main.",
+    },
     instructionOverride: nullableStringSchema,
-    targetSets: nullableIntegerSchema,
-    targetReps: nullableIntegerSchema,
-    targetRepsMin: nullableIntegerSchema,
-    targetRepsMax: nullableIntegerSchema,
-    targetWeight: nullableNumberSchema,
-    targetWeightUnit: nullableStringSchema,
-    targetDurationSeconds: nullableIntegerSchema,
-    targetDistanceMeters: nullableNumberSchema,
-    restSeconds: nullableIntegerSchema,
+    targetSets: {
+      ...nullableIntegerSchema,
+      description: optionalTargetFieldDescription,
+    },
+    targetReps: {
+      ...nullableIntegerSchema,
+      description:
+        "Optional fixed rep target. Use this or a min/max rep range, not both. Omit or pass null when using targetRepsMin/targetRepsMax.",
+    },
+    targetRepsMin: {
+      ...nullableIntegerSchema,
+      description:
+        "Optional rep range minimum. Pair with targetRepsMax. Omit or pass null when using targetReps.",
+    },
+    targetRepsMax: {
+      ...nullableIntegerSchema,
+      description:
+        "Optional rep range maximum. Pair with targetRepsMin. Omit or pass null when using targetReps.",
+    },
+    targetWeight: {
+      ...nullableNumberSchema,
+      description: optionalTargetFieldDescription,
+    },
+    targetWeightUnit: {
+      ...nullableStringSchema,
+      description:
+        "Optional weight unit such as kg or lb. Omit or pass null when targetWeight is unset.",
+    },
+    targetDurationSeconds: {
+      ...nullableIntegerSchema,
+      description: optionalTargetFieldDescription,
+    },
+    targetDistanceMeters: {
+      ...nullableNumberSchema,
+      description: optionalTargetFieldDescription,
+    },
+    restSeconds: {
+      ...nullableIntegerSchema,
+      description: optionalTargetFieldDescription,
+    },
     tempo: nullableStringSchema,
-    rpeTarget: nullableIntegerSchema,
-    rirTarget: nullableIntegerSchema,
+    rpeTarget: {
+      ...nullableIntegerSchema,
+      description: optionalTargetFieldDescription,
+    },
+    rirTarget: {
+      ...nullableIntegerSchema,
+      description: optionalTargetFieldDescription,
+    },
     isOptional: { type: "boolean" },
   },
 } as const;
@@ -301,7 +422,12 @@ const workoutIdParamsSchema = {
   required: ["workoutId"],
   additionalProperties: false,
   properties: {
-    workoutId: { type: "string", minLength: 1 },
+    workoutId: {
+      type: "string",
+      minLength: 1,
+      description:
+        "Exact path param name. Pass the workout template id under params.workoutId.",
+    },
   },
 } as const;
 
@@ -386,7 +512,7 @@ function validateExerciseBody(
     return sendBadRequest(
       reply,
       "WORKOUT_TEMPLATE_EXERCISE_REPS_AMBIGUOUS",
-      "Use either targetReps or a min/max rep range, not both.",
+      "Use either targetReps or a min/max rep range, not both. Omit or pass null for the unused rep fields.",
     );
   }
 
@@ -447,100 +573,113 @@ async function createTemplate(request: FastifyRequest, reply: FastifyReply) {
   const id = body.id ?? createId("workout");
   const now = nowIsoString();
 
-  try {
-    request.server.db
-      .prepare(
-        `
-          INSERT INTO workout_templates (
-            id,
-            slug,
-            name,
-            description,
-            goal,
-            estimated_duration_min,
-            difficulty,
-            is_active,
-            created_at,
-            updated_at
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `,
-      )
-      .run(
-        id,
-        body.slug,
-        body.name,
-        body.description ?? null,
-        body.goal ?? null,
-        body.estimatedDurationMin ?? null,
-        body.difficulty ?? null,
-        toSqliteBoolean(body.isActive) ?? 1,
-        now,
-        now,
-      );
-
-    if (Array.isArray(body.exercises)) {
-      for (const exercise of body.exercises) {
-        const validationError = validateExerciseBody(reply, exercise);
-        if (validationError) {
-          return validationError;
-        }
-
-        request.server.db
-          .prepare(
-            `
-              INSERT INTO workout_template_exercises (
-                id,
-                workout_template_id,
-                exercise_id,
-                sequence,
-                block_label,
-                instruction_override,
-                target_sets,
-                target_reps,
-                target_reps_min,
-                target_reps_max,
-                target_weight,
-                target_weight_unit,
-                target_duration_seconds,
-                target_distance_meters,
-                rest_seconds,
-                tempo,
-                rpe_target,
-                rir_target,
-                is_optional
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-          )
-          .run(
-            exercise.id ?? createId("workout_exercise"),
-            id,
-            exercise.exerciseId,
-            exercise.sequence,
-            exercise.blockLabel,
-            exercise.instructionOverride ?? null,
-            exercise.targetSets ?? null,
-            exercise.targetReps ?? null,
-            exercise.targetRepsMin ?? null,
-            exercise.targetRepsMax ?? null,
-            exercise.targetWeight ?? null,
-            exercise.targetWeightUnit ?? null,
-            exercise.targetDurationSeconds ?? null,
-            exercise.targetDistanceMeters ?? null,
-            exercise.restSeconds ?? null,
-            exercise.tempo ?? null,
-            exercise.rpeTarget ?? null,
-            exercise.rirTarget ?? null,
-            toSqliteBoolean(exercise.isOptional) ?? 0,
-          );
+  if (Array.isArray(body.exercises)) {
+    for (const exercise of body.exercises) {
+      const validationError = validateExerciseBody(reply, exercise);
+      if (validationError) {
+        return validationError;
       }
+    }
+  }
+
+  try {
+    request.server.db.exec("BEGIN");
+
+    try {
+      request.server.db
+        .prepare(
+          `
+            INSERT INTO workout_templates (
+              id,
+              slug,
+              name,
+              description,
+              goal,
+              estimated_duration_min,
+              difficulty,
+              is_active,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+        )
+        .run(
+          id,
+          body.slug,
+          body.name,
+          body.description ?? null,
+          body.goal ?? null,
+          body.estimatedDurationMin ?? null,
+          body.difficulty ?? null,
+          toSqliteBoolean(body.isActive) ?? 1,
+          now,
+          now,
+        );
+
+      if (Array.isArray(body.exercises)) {
+        for (const exercise of body.exercises) {
+          request.server.db
+            .prepare(
+              `
+                INSERT INTO workout_template_exercises (
+                  id,
+                  workout_template_id,
+                  exercise_id,
+                  sequence,
+                  block_label,
+                  instruction_override,
+                  target_sets,
+                  target_reps,
+                  target_reps_min,
+                  target_reps_max,
+                  target_weight,
+                  target_weight_unit,
+                  target_duration_seconds,
+                  target_distance_meters,
+                  rest_seconds,
+                  tempo,
+                  rpe_target,
+                  rir_target,
+                  is_optional
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `,
+            )
+            .run(
+              exercise.id ?? createId("workout_exercise"),
+              id,
+              exercise.exerciseId,
+              exercise.sequence,
+              exercise.blockLabel,
+              exercise.instructionOverride ?? null,
+              exercise.targetSets ?? null,
+              exercise.targetReps ?? null,
+              exercise.targetRepsMin ?? null,
+              exercise.targetRepsMax ?? null,
+              exercise.targetWeight ?? null,
+              exercise.targetWeightUnit ?? null,
+              exercise.targetDurationSeconds ?? null,
+              exercise.targetDistanceMeters ?? null,
+              exercise.restSeconds ?? null,
+              exercise.tempo ?? null,
+              exercise.rpeTarget ?? null,
+              exercise.rirTarget ?? null,
+              toSqliteBoolean(exercise.isOptional) ?? 0,
+            );
+        }
+      }
+
+      request.server.db.exec("COMMIT");
+    } catch (error) {
+      request.server.db.exec("ROLLBACK");
+      throw error;
     }
   } catch (error) {
     return handleSqliteError(reply, error, {
       conflictCode: "WORKOUT_TEMPLATE_CONFLICT",
       conflictMessage:
-        "Workout template conflicts with an existing slug or resource.",
+        "Workout template conflicts with an existing slug, id, or nested exercise resource.",
     });
   }
 

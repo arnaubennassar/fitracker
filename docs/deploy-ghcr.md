@@ -46,10 +46,16 @@ docker compose -f docker-compose.ghcr.yml pull
 docker compose -f docker-compose.ghcr.yml up -d
 ```
 
-The backend runs migrations automatically on startup. Seed demo data only when you want the sample dataset and seeded admin token:
+6. Configure MCP admin auth:
 
 ```bash
-docker compose -f docker-compose.ghcr.yml run --rm backend node dist/db/seed.js
+docker compose -f docker-compose.ghcr.yml run --rm backend set-admin-auth
+```
+
+Seed demo data only when you want the sample dataset and seeded admin token:
+
+```bash
+docker compose -f docker-compose.ghcr.yml run --rm backend seed
 ```
 
 ## Validate the deploy

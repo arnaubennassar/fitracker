@@ -49,6 +49,33 @@ User-facing workout execution and feedback endpoints are available under `/api/v
 
 The backend also exposes the admin surface as endpoint-mapped MCP tools at `/mcp` on the same port. Tool names match the admin `operationId` values and reuse the existing admin API validation and auth flow internally.
 
+MCP authoring notes:
+
+- Path params must use the exact schema key names exposed by each tool, for example `params.workoutId` for workout-template routes.
+- Exercise `trackingMode` is a strict enum: `distance`, `mixed`, `reps`, or `time`.
+- `createWorkoutTemplate` supports embedded `body.exercises`, and nested creation is atomic: if any embedded exercise fails validation or insert, the template is not created.
+- For workout template rep targets, use either `targetReps` or `targetRepsMin` plus `targetRepsMax`. Omit unused optional target fields or pass `null`.
+
+To configure the MCP admin token in Docker without editing compose env, run:
+
+```bash
+docker compose run --rm backend set-admin-auth
+```
+
+That command writes the MCP token to the shared data volume and upserts the matching admin token row in SQLite. To provide your own token or label:
+
+```bash
+docker compose run --rm backend set-admin-auth \
+  --token "replace-with-a-long-random-value" \
+  --name "Local MCP Token"
+```
+
+If you want the demo dataset as well, use:
+
+```bash
+docker compose run --rm backend seed
+```
+
 OpenAPI is generated from the registered route schemas and available at both `/openapi.json` and `/api/v1/openapi.json`.
 
 ## Checks

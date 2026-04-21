@@ -90,6 +90,10 @@ type ExerciseBody = {
   slug: string;
   trackingMode: "distance" | "mixed" | "reps" | "time";
 };
+
+const trackingModeDescription =
+  "Allowed values: distance, mixed, reps, time. Use the exact enum values; values like duration or weight_reps are invalid.";
+
 const categorySchema = {
   type: "object",
   required: ["id", "name", "description", "exerciseCount"],
@@ -176,6 +180,7 @@ const exerciseSchema = {
     trackingMode: {
       type: "string",
       enum: ["distance", "mixed", "reps", "time"],
+      description: trackingModeDescription,
     },
     difficulty: {
       type: "string",
@@ -199,6 +204,8 @@ const exerciseDetailSchema = {
 } as const;
 const exerciseBodySchema = {
   type: "object",
+  description:
+    "Creates an exercise definition. trackingMode is a strict enum and must use one of the documented exact values.",
   required: [
     "slug",
     "name",
@@ -224,6 +231,7 @@ const exerciseBodySchema = {
     trackingMode: {
       type: "string",
       enum: ["distance", "mixed", "reps", "time"],
+      description: trackingModeDescription,
     },
     difficulty: {
       type: "string",

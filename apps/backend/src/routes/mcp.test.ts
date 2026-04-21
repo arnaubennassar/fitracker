@@ -5,12 +5,19 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 import { buildApp } from "../app.js";
+import { upsertAdminToken } from "../db/admin-tokens.js";
 import { seedDatabase } from "../db/seeds.js";
+import { writeMcpAdminToken } from "../lib/mcp-admin-auth.js";
 import { createTestEnv } from "../test-helpers.js";
 
 type McpClientContext = {
   client: Client;
   transport: StreamableHTTPClientTransport;
+};
+
+type ToolWithInputSchema = {
+  description?: string;
+  inputSchema: Record<string, unknown>;
 };
 
 async function startMcpClient(
@@ -59,6 +66,29 @@ function extractStructuredContent(result: unknown) {
   };
 }
 
+function findTool(
+  toolsResult: Awaited<ReturnType<Client["listTools"]>>,
+  name: string,
+) {
+  const tool = toolsResult.tools.find((item) => item.name === name);
+  assert.ok(tool, `Expected tool ${name} to be exposed over MCP.`);
+  return tool;
+}
+
+function getNestedObject(value: unknown, key: string) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const nested = (value as Record<string, unknown>)[key];
+
+  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+    return undefined;
+  }
+
+  return nested as Record<string, unknown>;
+}
+
 test("MCP exposes only admin operationIds as tools", async () => {
   const context = createTestEnv();
   const app = buildApp({ env: context.env });
@@ -78,6 +108,81 @@ test("MCP exposes only admin operationIds as tools", async () => {
     assert.deepEqual(toolNames, expectedNames);
     assert.ok(!toolNames.includes("listMyWorkoutSessions"));
     assert.ok(!toolNames.includes("getHealth"));
+
+    await client.close();
+    await transport.close();
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("MCP exposes workout authoring enums and exact param hints", async () => {
+  const context = createTestEnv();
+  const app = buildApp({ env: context.env });
+
+  try {
+    seedDatabase(app.db, context.env);
+    const { client, transport } = await startMcpClient(app);
+    const toolsResult = await client.listTools();
+
+    const createExerciseTool = findTool(
+      toolsResult,
+      "createExercise",
+    ) as ToolWithInputSchema;
+    const createWorkoutTemplateTool = findTool(
+      toolsResult,
+      "createWorkoutTemplate",
+    ) as ToolWithInputSchema;
+    const createWorkoutTemplateExerciseTool = findTool(
+      toolsResult,
+      "createWorkoutTemplateExercise",
+    ) as ToolWithInputSchema;
+    const createExerciseBodySchema = getNestedObject(
+      createExerciseTool.inputSchema,
+      "properties",
+    );
+    const createExerciseBodyProperties = getNestedObject(
+      getNestedObject(createExerciseBodySchema, "body"),
+      "properties",
+    );
+    const createExerciseTrackingModeSchema = getNestedObject(
+      createExerciseBodyProperties,
+      "trackingMode",
+    );
+    const workoutTemplateExerciseParamsSchema = getNestedObject(
+      getNestedObject(
+        createWorkoutTemplateExerciseTool.inputSchema,
+        "properties",
+      ),
+      "params",
+    );
+    const workoutTemplateIdSchema = getNestedObject(
+      getNestedObject(workoutTemplateExerciseParamsSchema, "properties"),
+      "workoutId",
+    );
+
+    assert.equal(
+      Array.isArray(createExerciseTrackingModeSchema?.enum)
+        ? createExerciseTrackingModeSchema.enum.join(",")
+        : undefined,
+      "distance,mixed,reps,time",
+    );
+    assert.match(createExerciseTool.description ?? "", /strict enum/i);
+    assert.match(
+      createWorkoutTemplateTool.description ?? "",
+      /created atomically/i,
+    );
+    assert.match(
+      createWorkoutTemplateExerciseTool.description ?? "",
+      /params\.workoutId/,
+    );
+    assert.match(
+      typeof workoutTemplateIdSchema?.description === "string"
+        ? workoutTemplateIdSchema.description
+        : "",
+      /params\.workoutId/,
+    );
 
     await client.close();
     await transport.close();
@@ -257,6 +362,104 @@ test("MCP surfaces admin auth, validation, not-found, and conflict errors", asyn
   } finally {
     await authApp.close();
     await validationApp.close();
+    context.cleanup();
+  }
+});
+
+test("MCP createWorkoutTemplate rolls back nested create failures", async () => {
+  const context = createTestEnv();
+  const app = buildApp({ env: context.env });
+
+  try {
+    seedDatabase(app.db, context.env);
+    const { client, transport } = await startMcpClient(app);
+
+    const failureResult = await client.callTool({
+      name: "createWorkoutTemplate",
+      arguments: {
+        body: {
+          slug: "atomic-template",
+          name: "Atomic Template",
+          exercises: [
+            {
+              exerciseId: "exercise_goblet_squat",
+              sequence: 1,
+              blockLabel: "Main",
+              targetReps: 8,
+            },
+            {
+              exerciseId: "exercise_missing",
+              sequence: 2,
+              blockLabel: "Accessory",
+            },
+          ],
+        },
+      },
+    });
+    const failed = extractStructuredContent(failureResult);
+    assert.equal(failed.ok, false);
+    assert.equal(failed.statusCode, 409);
+    assert.equal(
+      (failed.error as { code?: string }).code,
+      "WORKOUT_TEMPLATE_CONFLICT_REFERENCE",
+    );
+
+    const listResult = await client.callTool({
+      name: "listWorkoutTemplates",
+      arguments: {
+        query: {
+          search: "atomic-template",
+        },
+      },
+    });
+    const listed = extractStructuredContent(listResult);
+    assert.equal(listed.ok, true);
+    assert.equal(
+      (listed.data as { items: Array<{ slug: string }> }).items.length,
+      0,
+    );
+
+    await client.close();
+    await transport.close();
+  } finally {
+    await app.close();
+    context.cleanup();
+  }
+});
+
+test("MCP can use a persisted token file instead of ADMIN_SEED_TOKEN", async () => {
+  const context = createTestEnv();
+  const app = buildApp({
+    env: {
+      ...context.env,
+      ADMIN_SEED_TOKEN: "fitracker-wrong-seed-token-for-mcp",
+    },
+  });
+
+  try {
+    seedDatabase(app.db, context.env);
+    upsertAdminToken(app.db, {
+      createdAt: new Date().toISOString(),
+      id: "admin_token_mcp_managed",
+      name: "MCP Admin Token",
+      salt: "managed:admin_token_mcp_managed",
+      token: "fitracker-mcp-token-from-file",
+    });
+    writeMcpAdminToken(app.config, "fitracker-mcp-token-from-file");
+
+    const { client, transport } = await startMcpClient(app);
+    const listResult = await client.callTool({
+      name: "listExerciseCategories",
+      arguments: {},
+    });
+    const listed = extractStructuredContent(listResult);
+    assert.equal(listed.ok, true);
+    assert.equal(listed.statusCode, 200);
+
+    await client.close();
+    await transport.close();
+  } finally {
+    await app.close();
     context.cleanup();
   }
 });

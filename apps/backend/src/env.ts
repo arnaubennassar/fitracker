@@ -16,6 +16,7 @@ const backendEnvSchema = z.object({
   API_BASE_PATH: z.string().default("/api/v1"),
   MCP_BASE_PATH: z.string().default("/mcp"),
   MCP_ADMIN_TOKEN: z.string().min(1).optional(),
+  MCP_ADMIN_TOKEN_FILE: z.string().min(1).optional(),
   AUTH_CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   WEBAUTHN_ORIGIN: z.string().url().optional(),

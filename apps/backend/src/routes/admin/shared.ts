@@ -26,7 +26,14 @@ export const idParamSchema = {
   type: "object",
   required: ["id"],
   additionalProperties: false,
-  properties: { id: { type: "string", minLength: 1 } },
+  properties: {
+    id: {
+      type: "string",
+      minLength: 1,
+      description:
+        "Exact path param name. Pass the resource id under params.id.",
+    },
+  },
 } as const;
 export const paginationQuerySchema = {
   type: "object",
@@ -116,11 +123,17 @@ export function sendBadRequest(
   reply: FastifyReply,
   code: string,
   error: string,
+  details?: Record<string, unknown>,
 ) {
-  return reply.code(400).send({ code, error, statusCode: 400 });
+  return reply.code(400).send({ code, error, statusCode: 400, ...details });
 }
-export function sendConflict(reply: FastifyReply, code: string, error: string) {
-  return reply.code(409).send({ code, error, statusCode: 409 });
+export function sendConflict(
+  reply: FastifyReply,
+  code: string,
+  error: string,
+  details?: Record<string, unknown>,
+) {
+  return reply.code(409).send({ code, error, statusCode: 409, ...details });
 }
 export function sendServerError(
   reply: FastifyReply,
@@ -135,19 +148,34 @@ export function handleSqliteError(
   options: { conflictCode: string; conflictMessage: string },
 ) {
   if (error instanceof Error) {
-    if (error.message.includes("UNIQUE constraint failed"))
-      return sendConflict(reply, options.conflictCode, options.conflictMessage);
+    if (error.message.includes("UNIQUE constraint failed")) {
+      const constraint = error.message.split(":")[1]?.trim() ?? null;
+      return sendConflict(
+        reply,
+        options.conflictCode,
+        options.conflictMessage,
+        {
+          constraint,
+        },
+      );
+    }
     if (error.message.includes("FOREIGN KEY constraint failed"))
       return sendConflict(
         reply,
         `${options.conflictCode}_REFERENCE`,
         "Referenced resource does not exist or is still in use.",
+        {
+          constraint: "foreign_key",
+        },
       );
     if (error.message.includes("CHECK constraint failed"))
       return sendBadRequest(
         reply,
         `${options.conflictCode}_CHECK`,
         "Input does not satisfy a database constraint.",
+        {
+          constraint: error.message.split(":")[1]?.trim() ?? null,
+        },
       );
   }
   throw error;

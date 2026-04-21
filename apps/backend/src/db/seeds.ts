@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { AppEnv } from "../env.js";
-import { hashAdminToken } from "../lib/admin-token.js";
+import { upsertAdminToken as upsertAdminTokenRecord } from "./admin-tokens.js";
 import {
   seedExerciseCategories,
   seedExerciseMedia,
@@ -19,94 +19,14 @@ function stringifyJson(value: unknown) {
   return JSON.stringify(value);
 }
 
-function getTableColumns(db: DatabaseSync, tableName: string) {
-  return new Set(
-    (
-      db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
-        name: string;
-      }>
-    ).map((column) => column.name),
-  );
-}
-
 function upsertAdminToken(db: DatabaseSync, env: AppEnv) {
-  const tokenHash = hashAdminToken(env.ADMIN_SEED_TOKEN, {
-    salt: `seed:${env.ADMIN_SEED_TOKEN_NAME}`,
-  });
-  const tokenPreview = env.ADMIN_SEED_TOKEN.slice(-6);
-  const tokenScopes = stringifyJson(["admin:*"]);
-  const columns = getTableColumns(db, "admin_tokens");
-
-  if (columns.has("scopes_json")) {
-    db.prepare(
-      `
-        INSERT INTO admin_tokens (
-          id,
-          name,
-          token_hash,
-          token_preview,
-          scopes,
-          scopes_json,
-          last_used_at,
-          expires_at,
-          created_at,
-          revoked_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          token_hash = excluded.token_hash,
-          token_preview = excluded.token_preview,
-          scopes = excluded.scopes,
-          scopes_json = excluded.scopes_json,
-          revoked_at = NULL
-      `,
-    ).run(
-      "admin_token_fitnaista_seed",
-      env.ADMIN_SEED_TOKEN_NAME,
-      tokenHash,
-      tokenPreview,
-      tokenScopes,
-      tokenScopes,
-      seedTimestamps.createdAt,
-    );
-  } else {
-    db.prepare(
-      `
-        INSERT INTO admin_tokens (
-          id,
-          name,
-          token_hash,
-          token_preview,
-          scopes,
-          last_used_at,
-          expires_at,
-          created_at,
-          revoked_at
-        )
-        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, NULL)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          token_hash = excluded.token_hash,
-          token_preview = excluded.token_preview,
-          scopes = excluded.scopes,
-          revoked_at = NULL
-      `,
-    ).run(
-      "admin_token_fitnaista_seed",
-      env.ADMIN_SEED_TOKEN_NAME,
-      tokenHash,
-      tokenPreview,
-      tokenScopes,
-      seedTimestamps.createdAt,
-    );
-  }
-
-  return {
+  return upsertAdminTokenRecord(db, {
+    createdAt: seedTimestamps.createdAt,
     id: "admin_token_fitnaista_seed",
     name: env.ADMIN_SEED_TOKEN_NAME,
-    preview: tokenPreview,
-  };
+    salt: `seed:${env.ADMIN_SEED_TOKEN_NAME}`,
+    token: env.ADMIN_SEED_TOKEN,
+  });
 }
 
 function upsertExerciseCategories(db: DatabaseSync) {

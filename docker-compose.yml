@@ -12,6 +12,7 @@ services:
       ADMIN_SEED_TOKEN: ${ADMIN_SEED_TOKEN:-fitracker-local-admin-token-v1}
       ADMIN_SEED_TOKEN_NAME: ${ADMIN_SEED_TOKEN_NAME:-Local Coach Token}
       API_BASE_PATH: ${API_BASE_PATH:-/api/v1}
+      MCP_ADMIN_TOKEN_FILE: ${MCP_ADMIN_TOKEN_FILE:-/data/mcp-admin-token}
     ports:
       - "3001:3001"
     volumes:

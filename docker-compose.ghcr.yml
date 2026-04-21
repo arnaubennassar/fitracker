@@ -13,6 +13,7 @@ services:
       # Set a long random token before first deploy. This is the seeded admin bearer token.
       ADMIN_SEED_TOKEN: ${ADMIN_SEED_TOKEN:?set ADMIN_SEED_TOKEN in your shell or .env file}
       ADMIN_SEED_TOKEN_NAME: ${ADMIN_SEED_TOKEN_NAME:-Arnau Coach Token}
+      MCP_ADMIN_TOKEN_FILE: ${MCP_ADMIN_TOKEN_FILE:-/data/mcp-admin-token}
 
       # These should match the public URL where the frontend is served.
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:3000}
