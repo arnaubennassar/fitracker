@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+// biome-ignore lint/style/useImportType: Vitest needs a runtime React import for JSX in this file.
+import React from "react";
+import { useState } from "react";
 
 import { useSession } from "../providers";
 
@@ -65,43 +68,105 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { session, signOut } = useSession();
   const isAuthed = Boolean(session?.authenticated);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const meta = getRouteMeta(pathname);
+  const isMinimalHome = isAuthed && pathname === "/";
 
   return (
     <div className="app-root">
       <div className="app-backdrop" />
-      <div className="mobile-shell">
-        <header className="topbar">
-          <div className="topbar-surface">
-            <div className="topbar-brand">
-              <div className="brand-mark">FT</div>
-              <div className="title-block">
-                <p className="eyebrow">{meta.eyebrow}</p>
-                <h1 className="topbar-title">{meta.title}</h1>
-                <p className="topbar-subtitle">{meta.subtitle}</p>
-              </div>
-            </div>
-
-            <div className="topbar-actions">
-              {isAuthed ? (
-                <button
-                  className="icon-button"
-                  onClick={async () => {
-                    await signOut();
-                    router.push("/login");
-                  }}
-                  type="button"
+      <div
+        className={
+          isMinimalHome ? "mobile-shell mobile-shell-home" : "mobile-shell"
+        }
+      >
+        {isMinimalHome ? (
+          <div className="home-toolbar">
+            <div className="settings-menu-shell">
+              <button
+                aria-controls="home-settings-menu"
+                aria-expanded={settingsOpen}
+                aria-haspopup="menu"
+                className="icon-button"
+                onClick={() => {
+                  setSettingsOpen((current) => !current);
+                }}
+                type="button"
+              >
+                Settings
+              </button>
+              {settingsOpen ? (
+                <div
+                  aria-label="Settings"
+                  className="settings-menu"
+                  id="home-settings-menu"
+                  role="menu"
                 >
-                  Sign out
-                </button>
+                  <Link
+                    className="settings-menu-item"
+                    href="/history"
+                    onClick={() => {
+                      setSettingsOpen(false);
+                    }}
+                    role="menuitem"
+                  >
+                    History
+                  </Link>
+                  <button
+                    className="settings-menu-item"
+                    onClick={async () => {
+                      setSettingsOpen(false);
+                      await signOut();
+                      router.push("/login");
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    Log out
+                  </button>
+                </div>
               ) : null}
             </div>
           </div>
-        </header>
+        ) : (
+          <header className="topbar">
+            <div className="topbar-surface">
+              <div className="topbar-brand">
+                <div className="brand-mark">FT</div>
+                <div className="title-block">
+                  <p className="eyebrow">{meta.eyebrow}</p>
+                  <h1 className="topbar-title">{meta.title}</h1>
+                  <p className="topbar-subtitle">{meta.subtitle}</p>
+                </div>
+              </div>
 
-        <main className="screen-shell">{children}</main>
+              <div className="topbar-actions">
+                {isAuthed ? (
+                  <button
+                    className="icon-button"
+                    onClick={async () => {
+                      await signOut();
+                      router.push("/login");
+                    }}
+                    type="button"
+                  >
+                    Sign out
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </header>
+        )}
 
-        {isAuthed ? (
+        <main
+          className={
+            isMinimalHome ? "screen-shell screen-shell-home" : "screen-shell"
+          }
+        >
+          {children}
+        </main>
+
+        {isAuthed && !isMinimalHome ? (
           <nav aria-label="Primary" className="bottom-nav">
             {navItems.map((item) => {
               const active =
