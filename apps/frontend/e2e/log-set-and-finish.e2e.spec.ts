@@ -24,10 +24,12 @@ test("restores runner state, logs a set, and reaches feedback", async ({
   });
 
   await page.goto("/sessions/session_runner");
+  await expect(page.getByRole("link", { name: "Home" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(
+    0,
+  );
   await page.getByRole("button", { name: "Complete set" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Split stance row" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Log set 2" })).toBeVisible();
 
   await page.getByRole("button", { name: "Finish workout" }).click();
 

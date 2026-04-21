@@ -7,6 +7,7 @@ This repository is a `pnpm` monorepo for Fitracker. Agents working here should b
 - Read the relevant code and nearby docs before changing behavior.
 - Prefer targeted changes over broad refactors unless the task explicitly requires a larger rewrite.
 - Keep backend and frontend contracts aligned when a change crosses that boundary.
+- Always use `frontend-skill` when coding or changing frontend behavior.
 - Do not introduce new tools, frameworks, or patterns without a clear need.
 - Update documentation when behavior, setup, or workflows materially change.
 

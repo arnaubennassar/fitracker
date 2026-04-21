@@ -200,7 +200,27 @@ describe("session runner page", () => {
         name: "Split stance row",
       }),
     ).toBeVisible();
-    expect(screen.getByText(/1 \/ 2 exercises done/)).toBeVisible();
+    expect(screen.getByText("Exercise 2 of 2 · Accessory")).toBeVisible();
+  });
+
+  test("renders the streamlined session layout without workout summary chrome", async () => {
+    mocks.getWorkoutSession.mockResolvedValueOnce(buildWorkoutSession());
+    mocks.getWorkoutDetail.mockResolvedValueOnce(buildWorkoutTemplateDetail());
+    mocks.getExerciseDetail.mockResolvedValue(buildExerciseDetail());
+
+    render(<SessionRunnerPage />);
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Goblet squat",
+      }),
+    ).toBeVisible();
+    expect(screen.getByText("Exercise 1 of 2 · Main")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
+    expect(screen.queryByText("In workout")).not.toBeInTheDocument();
+    expect(screen.queryByText("Jump between blocks")).not.toBeInTheDocument();
   });
 
   test("starts the exercise timer and lets the athlete skip rest", async () => {

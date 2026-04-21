@@ -72,7 +72,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const meta = getRouteMeta(pathname);
   const isMinimalHome = isAuthed && pathname === "/";
   const isMinimalSecondary =
-    isAuthed && (pathname === "/history" || pathname.startsWith("/workouts/"));
+    isAuthed &&
+    (pathname === "/history" ||
+      pathname.startsWith("/workouts/") ||
+      (pathname.startsWith("/sessions/") && !pathname.endsWith("/feedback")));
   const isMinimalShell = isMinimalHome || isMinimalSecondary;
 
   return (

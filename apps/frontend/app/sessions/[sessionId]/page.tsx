@@ -27,9 +27,7 @@ import type {
 } from "../../_lib/types";
 import {
   clampNumber,
-  countCompletedExercises,
   describeExerciseTarget,
-  formatClock,
   formatDuration,
   getNextIncompleteExerciseIndex,
   getSessionElapsedSeconds,
@@ -398,14 +396,6 @@ export default function SessionRunnerPage() {
 
   const currentSets = setsForExercise(session, currentExercise.id);
   const nextSetNumber = currentSets.length + 1;
-  const completedExercises = countCompletedExercises(
-    workout.exercises,
-    session,
-  );
-  const progressPercent =
-    workout.exercises.length > 0
-      ? (completedExercises / workout.exercises.length) * 100
-      : 0;
   const restRemainingSeconds = restTimerEndsAt
     ? Math.max(0, Math.ceil((restTimerEndsAt - tick) / 1000))
     : 0;
@@ -414,55 +404,19 @@ export default function SessionRunnerPage() {
       ? Math.max(0, Math.ceil((exerciseTimerEndsAt - tick) / 1000))
       : 0;
   const exerciseFinished = isExerciseComplete(currentExercise, session);
-  const exercisesRemaining = Math.max(
-    workout.exercises.length - completedExercises,
-    0,
-  );
+  const isFirstExercise = currentExerciseIndex === 0;
+  const isLastExercise = currentExerciseIndex === workout.exercises.length - 1;
 
   return (
     <div className="content-stack">
-      <section className="panel-card">
-        <div className="panel-heading">
-          <div>
-            <p className="section-label">In workout</p>
-            <h3>{session.workoutTemplate.name}</h3>
-          </div>
-          <span className="pill neutral-pill">
-            {formatDuration(getSessionElapsedSeconds(session))}
-          </span>
-        </div>
-        <div className="metric-grid compact-metric-grid">
-          <article className="metric-card metric-card-muted">
-            <span className="metric-label">Progress</span>
-            <strong className="metric-value">
-              {completedExercises}/{workout.exercises.length}
-            </strong>
-            <p className="metric-copy">exercise blocks done</p>
-          </article>
-          <article className="metric-card metric-card-muted">
-            <span className="metric-label">Current</span>
-            <strong className="metric-value">{currentExerciseIndex + 1}</strong>
-            <p className="metric-copy">{currentExercise.exercise.name}</p>
-          </article>
-          <article className="metric-card metric-card-muted">
-            <span className="metric-label">Remaining</span>
-            <strong className="metric-value">{exercisesRemaining}</strong>
-            <p className="metric-copy">blocks left after this one</p>
-          </article>
-        </div>
-        <div className="progress-bar" role="presentation">
-          <div style={{ width: `${progressPercent}%` }} />
-        </div>
-        <p className="helper-copy">
-          {completedExercises} / {workout.exercises.length} exercises done ·
-          Started {formatClock(session.startedAt)}
-        </p>
-      </section>
-
       <section className="hero-card">
         <div className="hero-topline">
           <div>
-            <p className="eyebrow">{titleCase(currentExercise.blockLabel)}</p>
+            <p className="eyebrow">
+              Exercise {currentExerciseIndex + 1} of {workout.exercises.length}
+              {" · "}
+              {titleCase(currentExercise.blockLabel)}
+            </p>
             <h2 className="hero-title">{currentExercise.exercise.name}</h2>
           </div>
           <span className={exerciseFinished ? "pill success-pill" : "pill"}>
@@ -655,15 +609,6 @@ export default function SessionRunnerPage() {
         ) : null}
 
         {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
-      </section>
-
-      <section className="panel-card">
-        <div className="panel-heading">
-          <div>
-            <p className="section-label">Logged</p>
-            <h3>Current exercise sets</h3>
-          </div>
-        </div>
         <div className="chip-row">
           {currentSets.map((setItem) => (
             <span className="set-chip" key={setItem.id}>
@@ -681,48 +626,10 @@ export default function SessionRunnerPage() {
       </section>
 
       <section className="panel-card">
-        <div className="panel-heading">
-          <div>
-            <p className="section-label">Exercise list</p>
-            <h3>Jump between blocks</h3>
-          </div>
-        </div>
-        <div className="list-stack compact-stack">
-          {workout.exercises.map((exercise, index) => (
-            <button
-              className={
-                index === currentExerciseIndex
-                  ? "exercise-nav-row active"
-                  : "exercise-nav-row"
-              }
-              key={exercise.id}
-              onClick={() => {
-                setCurrentExerciseIndex(index);
-              }}
-              type="button"
-            >
-              <div>
-                <p className="mini-kicker">{titleCase(exercise.blockLabel)}</p>
-                <h4>{exercise.exercise.name}</h4>
-              </div>
-              <span
-                className={
-                  isExerciseComplete(exercise, session)
-                    ? "pill success-pill"
-                    : "pill neutral-pill"
-                }
-              >
-                {isExerciseComplete(exercise, session) ? "Done" : "Open"}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel-card">
         <div className="action-row">
           <button
             className="secondary-button"
+            disabled={isFirstExercise}
             onClick={() => {
               const nextIndex = clampNumber(
                 currentExerciseIndex - 1,
@@ -737,6 +644,7 @@ export default function SessionRunnerPage() {
           </button>
           <button
             className="secondary-button"
+            disabled={isLastExercise}
             onClick={() => {
               const nextIndex = clampNumber(
                 currentExerciseIndex + 1,

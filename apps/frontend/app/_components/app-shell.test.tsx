@@ -112,4 +112,26 @@ describe("app shell", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Workout detail")).not.toBeInTheDocument();
   });
+
+  test("renders a minimal session shell with a home control", () => {
+    mocks.pathname = "/sessions/session_foundation_a";
+
+    render(
+      <AppShell>
+        <div>Session page</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(
+      screen.queryByRole("navigation", { name: "Primary" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Session runner")).not.toBeInTheDocument();
+  });
 });
