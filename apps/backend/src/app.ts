@@ -12,6 +12,7 @@ import type { AppEnv } from "./env.js";
 import { buildOpenApiDocument } from "./lib/openapi.js";
 import { adminRoutes } from "./routes/admin.js";
 import { buildDocsHtml } from "./routes/docs.js";
+import { registerMcpRoutes } from "./routes/mcp.js";
 import { buildRouteSchema, registerRoutes } from "./routes/registry.js";
 import { systemRoutes } from "./routes/system.js";
 import { userRoutes } from "./routes/user.js";
@@ -153,6 +154,8 @@ export function buildApp({ env }: BuildAppOptions): FastifyInstance {
       apiBasePath: env.API_BASE_PATH,
     }),
   ]);
+
+  registerMcpRoutes(app);
 
   app.get(
     `${env.API_BASE_PATH}/openapi.json`,

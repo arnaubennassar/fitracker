@@ -21,6 +21,7 @@ pnpm dev
 - Backend health: `http://localhost:3001/health`
 - Backend docs: `http://localhost:3001/docs`
 - OpenAPI JSON: `http://localhost:3001/openapi.json`
+- MCP endpoint: `http://localhost:3001/mcp`
 
 ## Seeded local access
 
@@ -45,6 +46,8 @@ Authenticated admin endpoints cover:
 - reporting for workout sessions and feedback at `/api/v1/admin/reporting/*`
 
 User-facing workout execution and feedback endpoints are available under `/api/v1/auth/*` and `/api/v1/me/*`.
+
+The backend also exposes the admin surface as endpoint-mapped MCP tools at `/mcp` on the same port. Tool names match the admin `operationId` values and reuse the existing admin API validation and auth flow internally.
 
 OpenAPI is generated from the registered route schemas and available at both `/openapi.json` and `/api/v1/openapi.json`.
 

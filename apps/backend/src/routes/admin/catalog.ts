@@ -423,11 +423,18 @@ async function updateCategory(request: FastifyRequest, reply: FastifyReply) {
         "Exercise category update conflicts with an existing name.",
     });
   }
-  return {
-    id: params.id,
-    name: body.name,
-    description: body.description ?? null,
-  };
+
+  const row = request.server.db
+    .prepare("SELECT * FROM exercise_categories WHERE id = ?")
+    .get(params.id) as CategoryRow | undefined;
+
+  return row
+    ? mapCategory(row)
+    : sendNotFound(
+        reply,
+        "EXERCISE_CATEGORY_NOT_FOUND",
+        "Exercise category not found.",
+      );
 }
 async function deleteCategory(request: FastifyRequest, reply: FastifyReply) {
   const params = request.params as { id: string };
