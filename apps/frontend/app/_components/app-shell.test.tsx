@@ -72,7 +72,7 @@ describe("app shell", () => {
     expect(mocks.push).toHaveBeenCalledWith("/login");
   });
 
-  test("keeps the original shell chrome on non-home routes", () => {
+  test("renders a minimal history shell with a home control", () => {
     mocks.pathname = "/history";
 
     render(
@@ -81,7 +81,28 @@ describe("app shell", () => {
       </AppShell>,
     );
 
-    expect(screen.getByRole("heading", { name: "History" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(
+      screen.queryByRole("navigation", { name: "Primary" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Training archive")).not.toBeInTheDocument();
+  });
+
+  test("keeps the original shell chrome on other authed routes", () => {
+    mocks.pathname = "/workouts/template_foundation_a";
+
+    render(
+      <AppShell>
+        <div>Workout page</div>
+      </AppShell>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Workout detail" }),
+    ).toBeVisible();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "Settings" }),

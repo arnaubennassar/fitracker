@@ -82,6 +82,9 @@ describe("history page", () => {
     render(<HistoryPage />);
 
     expect(
+      await screen.findByRole("heading", { name: "History" }),
+    ).toBeVisible();
+    expect(
       await screen.findByRole("heading", { name: "No history yet" }),
     ).toBeVisible();
   });

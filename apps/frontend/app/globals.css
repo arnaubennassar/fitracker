@@ -172,6 +172,10 @@ code {
   padding: calc(0.25rem + env(safe-area-inset-top, 0px)) 0 0.75rem;
 }
 
+.toolbar-start {
+  justify-content: flex-start;
+}
+
 .settings-menu-shell {
   position: relative;
 }

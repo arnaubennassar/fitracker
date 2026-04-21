@@ -71,13 +71,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const meta = getRouteMeta(pathname);
   const isMinimalHome = isAuthed && pathname === "/";
+  const isMinimalHistory = isAuthed && pathname === "/history";
+  const isMinimalShell = isMinimalHome || isMinimalHistory;
 
   return (
     <div className="app-root">
       <div className="app-backdrop" />
       <div
         className={
-          isMinimalHome ? "mobile-shell mobile-shell-home" : "mobile-shell"
+          isMinimalShell ? "mobile-shell mobile-shell-home" : "mobile-shell"
         }
       >
         {isMinimalHome ? (
@@ -128,6 +130,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ) : null}
             </div>
           </div>
+        ) : isMinimalHistory ? (
+          <div className="home-toolbar toolbar-start">
+            <Link className="icon-button" href="/">
+              Home
+            </Link>
+          </div>
         ) : (
           <header className="topbar">
             <div className="topbar-surface">
@@ -160,13 +168,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <main
           className={
-            isMinimalHome ? "screen-shell screen-shell-home" : "screen-shell"
+            isMinimalShell ? "screen-shell screen-shell-home" : "screen-shell"
           }
         >
           {children}
         </main>
 
-        {isAuthed && !isMinimalHome ? (
+        {isAuthed && !isMinimalShell ? (
           <nav aria-label="Primary" className="bottom-nav">
             {navItems.map((item) => {
               const active =

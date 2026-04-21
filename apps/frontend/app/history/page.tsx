@@ -15,17 +15,6 @@ export default function HistoryPage() {
   const { loading, session } = useSession();
   const [sessions, setSessions] = useState<WorkoutSessionDetail[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const completedCount = sessions.filter(
-    (sessionItem) => sessionItem.status === "completed",
-  ).length;
-  const feedbackPendingCount = sessions.filter(
-    (sessionItem) =>
-      sessionItem.status === "completed" && !sessionItem.feedback,
-  ).length;
-  const totalSetCount = sessions.reduce(
-    (total, sessionItem) => total + sessionItem.sets.length,
-    0,
-  );
 
   useEffect(() => {
     if (!loading && !session?.authenticated) {
@@ -65,49 +54,11 @@ export default function HistoryPage() {
   }, [session]);
 
   return (
-    <div className="content-stack">
-      <section className="hero-card hero-card-spotlight">
-        <div className="hero-grid">
-          <div className="hero-copy-block">
-            <div>
-              <p className="eyebrow">Training archive</p>
-              <h2 className="hero-title">Your logged work.</h2>
-            </div>
-            <p className="hero-copy">
-              Review the last sessions, pick up anything still in progress, and
-              leave feedback where the coach still needs context.
-            </p>
-          </div>
-
-          <div className="metric-grid compact-metric-grid">
-            <article className="metric-card">
-              <span className="metric-label">Sessions</span>
-              <strong className="metric-value">{sessions.length}</strong>
-              <p className="metric-copy">recent logs loaded</p>
-            </article>
-            <article className="metric-card">
-              <span className="metric-label">Completed</span>
-              <strong className="metric-value">{completedCount}</strong>
-              <p className="metric-copy">finished workouts</p>
-            </article>
-            <article className="metric-card">
-              <span className="metric-label">Feedback</span>
-              <strong className="metric-value">{feedbackPendingCount}</strong>
-              <p className="metric-copy">
-                {totalSetCount} sets captured overall
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="panel-card">
-        <div className="panel-heading">
-          <div>
-            <p className="section-label">Workout sessions</p>
-            <h3>All logged sessions</h3>
-          </div>
-          <span className="pill">{sessions.length}</span>
+    <div className="content-stack home-page">
+      <section className="panel-card workout-list-panel">
+        <div className="panel-heading home-panel-heading">
+          <h1 className="home-page-title">History</h1>
+          <span className="pill neutral-pill">{sessions.length}</span>
         </div>
         {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
         <div className="list-stack">
