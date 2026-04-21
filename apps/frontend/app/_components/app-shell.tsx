@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 // biome-ignore lint/style/useImportType: Vitest needs a runtime React import for JSX in this file.
 import React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useSession } from "../providers";
 
@@ -77,6 +77,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       pathname.startsWith("/workouts/") ||
       (pathname.startsWith("/sessions/") && !pathname.endsWith("/feedback")));
   const isMinimalShell = isMinimalHome || isMinimalSecondary;
+
+  useEffect(() => {
+    setSettingsOpen((current) => (pathname ? false : current));
+  }, [pathname]);
 
   return (
     <div className="app-root">
