@@ -1,5 +1,17 @@
-const CACHE_NAME = "fitracker-shell-v1";
+const CACHE_NAME = "fitracker-shell-v2";
 const APP_SHELL = ["/", "/login", "/history", "/offline.html", "/icon.svg"];
+
+function shouldBypassCache(request) {
+  if (request.cache === "no-store") {
+    return true;
+  }
+
+  const url = new URL(request.url);
+
+  return (
+    url.origin === self.location.origin && url.pathname.startsWith("/api/")
+  );
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -28,6 +40,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
+    return;
+  }
+
+  if (shouldBypassCache(event.request)) {
+    event.respondWith(fetch(event.request));
     return;
   }
 

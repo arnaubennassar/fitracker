@@ -152,7 +152,7 @@ export async function mockFitrackerApi(
     return true;
   }
 
-  await page.route("**/api/v1/**", async (route) => {
+  await page.context().route("**/api/v1/**", async (route) => {
     try {
       const request = route.request();
       const method = request.method();

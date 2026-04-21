@@ -24,4 +24,11 @@ test("signs in with a passkey and lands on the dashboard", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Assigned workouts" }),
   ).toBeVisible();
+
+  await page.reload();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Assigned workouts" }),
+  ).toBeVisible();
 });
