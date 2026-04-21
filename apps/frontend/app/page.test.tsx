@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   buildAuthSession,
   buildTodayWorkoutsResponse,
+  buildWorkoutAssignment,
   buildWorkoutSession,
   buildWorkoutSessionListResponse,
 } from "../test/fixtures";
@@ -180,5 +181,48 @@ describe("home page", () => {
       screen.getByRole("heading", { name: "Assigned workouts" }),
     ).toBeVisible();
     expect(screen.getByText("In progress")).toBeVisible();
+  });
+
+  test("refreshes assigned workouts when the window regains focus", async () => {
+    mocks.getTodayWorkouts
+      .mockResolvedValueOnce(buildTodayWorkoutsResponse())
+      .mockResolvedValueOnce(
+        buildTodayWorkoutsResponse({
+          items: [
+            buildWorkoutAssignment(),
+            buildWorkoutAssignment({
+              id: "assignment_foundation_b",
+              workoutTemplate: {
+                ...buildWorkoutAssignment().workoutTemplate,
+                id: "template_foundation_b",
+                name: "Foundation Session B",
+                slug: "foundation-session-b",
+              },
+            }),
+          ],
+        }),
+      );
+    mocks.listWorkoutSessions.mockResolvedValue(
+      buildWorkoutSessionListResponse([]),
+    );
+
+    render(<HomePage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Assigned workouts" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Foundation Session A" }),
+    ).toBeVisible();
+
+    window.dispatchEvent(new Event("focus"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Foundation Session B" }),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(mocks.getTodayWorkouts).toHaveBeenCalledTimes(2);
+      expect(mocks.listWorkoutSessions).toHaveBeenCalledTimes(2);
+    });
   });
 });

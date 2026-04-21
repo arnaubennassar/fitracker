@@ -49,6 +49,12 @@ type MockApiOptions = {
   workouts?: Record<string, WorkoutTemplateDetail>;
 };
 
+type MockApiControls = {
+  setAuthSession: (authSession: AuthSession) => void;
+  setSessions: (sessions: WorkoutSessionDetail[]) => void;
+  setTodayWorkouts: (todayWorkouts: TodayWorkoutsResponse) => void;
+};
+
 function clone<T>(value: T): T {
   return structuredClone(value);
 }
@@ -100,7 +106,7 @@ function listSessions(
 export async function mockFitrackerApi(
   page: Page,
   options: MockApiOptions = {},
-) {
+): Promise<MockApiControls> {
   const defaultWorkout = buildWorkoutTemplateDetail();
   const state = {
     authSession: clone(options.authSession ?? buildAuthSession()),
@@ -454,5 +460,15 @@ export async function mockFitrackerApi(
     }
   });
 
-  return state;
+  return {
+    setAuthSession(authSession) {
+      state.authSession = clone(authSession);
+    },
+    setSessions(sessions) {
+      state.sessions = clone(sessions);
+    },
+    setTodayWorkouts(todayWorkouts) {
+      state.todayWorkouts = clone(todayWorkouts);
+    },
+  };
 }

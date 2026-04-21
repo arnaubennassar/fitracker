@@ -1,4 +1,4 @@
-const CACHE_NAME = "fitracker-shell-v2";
+const CACHE_NAME = "fitracker-shell-v3";
 const APP_SHELL = ["/", "/login", "/history", "/offline.html", "/icon.svg"];
 
 function shouldBypassCache(request) {
@@ -9,7 +9,11 @@ function shouldBypassCache(request) {
   const url = new URL(request.url);
 
   return (
-    url.origin === self.location.origin && url.pathname.startsWith("/api/")
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith("/api/") ||
+      url.searchParams.has("_rsc") ||
+      request.headers.has("next-router-state-tree") ||
+      request.headers.has("rsc"))
   );
 }
 

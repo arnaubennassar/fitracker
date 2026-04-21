@@ -91,7 +91,7 @@ describe("app shell", () => {
     expect(screen.queryByText("Training archive")).not.toBeInTheDocument();
   });
 
-  test("keeps the original shell chrome on other authed routes", () => {
+  test("renders a minimal workout shell with a home control", () => {
     mocks.pathname = "/workouts/template_foundation_a";
 
     render(
@@ -100,12 +100,16 @@ describe("app shell", () => {
       </AppShell>,
     );
 
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "href",
+      "/",
+    );
     expect(
-      screen.getByRole("heading", { name: "Workout detail" }),
-    ).toBeVisible();
-    expect(screen.getByRole("navigation", { name: "Primary" })).toBeVisible();
+      screen.queryByRole("navigation", { name: "Primary" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Settings" }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText("Workout detail")).not.toBeInTheDocument();
   });
 });

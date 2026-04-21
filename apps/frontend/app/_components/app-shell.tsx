@@ -71,8 +71,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const meta = getRouteMeta(pathname);
   const isMinimalHome = isAuthed && pathname === "/";
-  const isMinimalHistory = isAuthed && pathname === "/history";
-  const isMinimalShell = isMinimalHome || isMinimalHistory;
+  const isMinimalSecondary =
+    isAuthed && (pathname === "/history" || pathname.startsWith("/workouts/"));
+  const isMinimalShell = isMinimalHome || isMinimalSecondary;
 
   return (
     <div className="app-root">
@@ -130,7 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ) : null}
             </div>
           </div>
-        ) : isMinimalHistory ? (
+        ) : isMinimalSecondary ? (
           <div className="home-toolbar toolbar-start">
             <Link className="icon-button" href="/">
               Home

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, getTodayWorkouts, listWorkoutSessions } from "./_lib/api";
+import { useForegroundRefresh } from "./_lib/foreground-refresh";
 import type { TodayWorkoutsResponse, WorkoutSessionDetail } from "./_lib/types";
 import { useSession } from "./providers";
 
@@ -16,7 +17,38 @@ export default function HomePage() {
   const [activeSession, setActiveSession] =
     useState<WorkoutSessionDetail | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadRequestIdRef = useRef(0);
   const authenticated = Boolean(session?.authenticated);
+
+  const loadDashboard = useCallback(async () => {
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+
+    try {
+      const [todayResponse, activeResponse] = await Promise.all([
+        getTodayWorkouts(),
+        listWorkoutSessions({ limit: 1, status: "in_progress" }),
+      ]);
+
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setToday(todayResponse);
+      setActiveSession(activeResponse.items[0] ?? null);
+      setErrorMessage(null);
+    } catch (error) {
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Could not load today’s workouts.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!sessionLoading && !authenticated) {
@@ -25,43 +57,23 @@ export default function HomePage() {
   }, [authenticated, router, sessionLoading]);
 
   useEffect(() => {
+    return () => {
+      loadRequestIdRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!authenticated) {
       return;
     }
 
-    let cancelled = false;
+    void loadDashboard();
+  }, [authenticated, loadDashboard]);
 
-    async function load() {
-      try {
-        const [todayResponse, activeResponse] = await Promise.all([
-          getTodayWorkouts(),
-          listWorkoutSessions({ limit: 1, status: "in_progress" }),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setToday(todayResponse);
-        setActiveSession(activeResponse.items[0] ?? null);
-        setErrorMessage(null);
-      } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(
-            error instanceof ApiError
-              ? error.message
-              : "Could not load today’s workouts.",
-          );
-        }
-      }
-    }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authenticated]);
+  useForegroundRefresh({
+    disabled: !authenticated,
+    refresh: loadDashboard,
+  });
 
   if (!authenticated) {
     return <section className="panel-card skeleton-panel" />;

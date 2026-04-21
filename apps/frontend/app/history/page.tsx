@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, listWorkoutSessions } from "../_lib/api";
+import { useForegroundRefresh } from "../_lib/foreground-refresh";
 import type { WorkoutSessionDetail } from "../_lib/types";
 import { formatDuration, formatSessionDate } from "../_lib/workout";
 import { useSession } from "../providers";
@@ -15,6 +16,31 @@ export default function HistoryPage() {
   const { loading, session } = useSession();
   const [sessions, setSessions] = useState<WorkoutSessionDetail[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadRequestIdRef = useRef(0);
+
+  const loadHistory = useCallback(async () => {
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+
+    try {
+      const response = await listWorkoutSessions({ limit: 30 });
+
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setSessions(response.items);
+      setErrorMessage(null);
+    } catch (error) {
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "Could not load history.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!loading && !session?.authenticated) {
@@ -23,35 +49,23 @@ export default function HistoryPage() {
   }, [loading, router, session]);
 
   useEffect(() => {
+    return () => {
+      loadRequestIdRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!session?.authenticated) {
       return;
     }
 
-    let cancelled = false;
+    void loadHistory();
+  }, [loadHistory, session]);
 
-    async function load() {
-      try {
-        const response = await listWorkoutSessions({ limit: 30 });
-        if (!cancelled) {
-          setSessions(response.items);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(
-            error instanceof ApiError
-              ? error.message
-              : "Could not load history.",
-          );
-        }
-      }
-    }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session]);
+  useForegroundRefresh({
+    disabled: !session?.authenticated,
+    refresh: loadHistory,
+  });
 
   return (
     <div className="content-stack home-page">

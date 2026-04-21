@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { ApiError, getAuthSession, logoutUser } from "./_lib/api";
+import { useForegroundRefresh } from "./_lib/foreground-refresh";
 import type { AuthSession } from "./_lib/types";
 
 type SessionContextValue = {
@@ -94,6 +95,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
+
+  useForegroundRefresh({
+    disabled: loading,
+    intervalMs: 60_000,
+    refresh: refreshSession,
+  });
 
   return (
     <SessionContext.Provider

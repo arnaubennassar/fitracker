@@ -1,25 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MediaGallery } from "../../_components/media-gallery";
-import {
-  ApiError,
-  createWorkoutSession,
-  getExerciseDetail,
-  getTodayWorkouts,
-  getWorkoutDetail,
-  listWorkoutSessions,
-} from "../../_lib/api";
-import type {
-  ExerciseDetail,
-  WorkoutAssignment,
-  WorkoutSessionDetail,
-  WorkoutTemplateDetail,
-} from "../../_lib/types";
+import { ApiError, getExerciseDetail, getWorkoutDetail } from "../../_lib/api";
+import { useForegroundRefresh } from "../../_lib/foreground-refresh";
+import type { ExerciseDetail, WorkoutTemplateDetail } from "../../_lib/types";
 import { describeExerciseTarget, titleCase } from "../../_lib/workout";
 import { useSession } from "../../providers";
 
@@ -28,9 +16,6 @@ export default function WorkoutDetailPage() {
   const router = useRouter();
   const { loading, session } = useSession();
   const [workout, setWorkout] = useState<WorkoutTemplateDetail | null>(null);
-  const [assignment, setAssignment] = useState<WorkoutAssignment | null>(null);
-  const [activeSession, setActiveSession] =
-    useState<WorkoutSessionDetail | null>(null);
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(
     null,
   );
@@ -38,7 +23,40 @@ export default function WorkoutDetailPage() {
     null,
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
+  const loadRequestIdRef = useRef(0);
+
+  const loadWorkout = useCallback(async () => {
+    if (!session?.authenticated || !params.workoutId) {
+      return;
+    }
+
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+
+    try {
+      const detail = await getWorkoutDetail(params.workoutId);
+
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setWorkout(detail);
+      setExpandedExerciseId(
+        (current) => current ?? detail.exercises[0]?.exercise.id ?? null,
+      );
+      setErrorMessage(null);
+    } catch (error) {
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Could not load the workout.",
+      );
+    }
+  }, [params.workoutId, session?.authenticated]);
 
   useEffect(() => {
     if (!loading && !session?.authenticated) {
@@ -47,55 +65,19 @@ export default function WorkoutDetailPage() {
   }, [loading, router, session]);
 
   useEffect(() => {
-    if (!session?.authenticated || !params.workoutId) {
-      return;
-    }
-
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const [detail, today, active] = await Promise.all([
-          getWorkoutDetail(params.workoutId),
-          getTodayWorkouts(),
-          listWorkoutSessions({ limit: 10, status: "in_progress" }),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setWorkout(detail);
-        setExpandedExerciseId(
-          (current) => current ?? detail.exercises[0]?.exercise.id ?? null,
-        );
-        setAssignment(
-          today.items.find(
-            (item) => item.workoutTemplate.id === params.workoutId,
-          ) ?? null,
-        );
-        setActiveSession(
-          active.items.find(
-            (item) => item.workoutTemplate.id === params.workoutId,
-          ) ?? null,
-        );
-      } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(
-            error instanceof ApiError
-              ? error.message
-              : "Could not load the workout.",
-          );
-        }
-      }
-    }
-
-    void load();
-
     return () => {
-      cancelled = true;
+      loadRequestIdRef.current += 1;
     };
-  }, [params.workoutId, session]);
+  }, []);
+
+  useEffect(() => {
+    void loadWorkout();
+  }, [loadWorkout]);
+
+  useForegroundRefresh({
+    disabled: !session?.authenticated || !params.workoutId,
+    refresh: loadWorkout,
+  });
 
   useEffect(() => {
     if (!expandedExerciseId) {
@@ -129,7 +111,7 @@ export default function WorkoutDetailPage() {
 
   if (!workout) {
     return (
-      <div className="content-stack">
+      <div className="content-stack home-page">
         {errorMessage ? (
           <p className="error-banner">{errorMessage}</p>
         ) : (
@@ -140,88 +122,16 @@ export default function WorkoutDetailPage() {
   }
 
   return (
-    <div className="content-stack">
-      <section className="hero-card hero-card-spotlight">
-        <div className="hero-grid">
-          <div className="hero-copy-block">
-            <div>
-              <p className="eyebrow">{workout.goal ?? "Assigned workout"}</p>
-              <h2 className="hero-title">{workout.name}</h2>
-            </div>
-            <p className="hero-copy">{workout.description}</p>
-          </div>
-
-          <div className="metric-grid compact-metric-grid">
-            <article className="metric-card">
-              <span className="metric-label">Length</span>
-              <strong className="metric-value">
-                {workout.estimatedDurationMin ?? "?"}
-              </strong>
-              <p className="metric-copy">minutes planned</p>
-            </article>
-            <article className="metric-card">
-              <span className="metric-label">Blocks</span>
-              <strong className="metric-value">
-                {workout.exercises.length}
-              </strong>
-              <p className="metric-copy">exercise targets</p>
-            </article>
-            <article className="metric-card">
-              <span className="metric-label">Level</span>
-              <strong className="metric-value">
-                {workout.difficulty ?? "all"}
-              </strong>
-              <p className="metric-copy">training difficulty</p>
-            </article>
-          </div>
-        </div>
-        <div className="action-row">
-          {activeSession ? (
-            <Link
-              className="primary-button"
-              href={`/sessions/${activeSession.id}`}
-            >
-              Resume current session
-            </Link>
-          ) : (
-            <button
-              className="primary-button"
-              disabled={starting}
-              onClick={async () => {
-                setStarting(true);
-                try {
-                  const created = await createWorkoutSession({
-                    assignmentId: assignment?.id ?? null,
-                    workoutTemplateId: workout.id,
-                  });
-                  router.push(`/sessions/${created.id}`);
-                } catch (error) {
-                  setErrorMessage(
-                    error instanceof ApiError
-                      ? error.message
-                      : "Could not start the workout.",
-                  );
-                } finally {
-                  setStarting(false);
-                }
-              }}
-              type="button"
-            >
-              {starting ? "Starting..." : "Start workout"}
-            </button>
-          )}
-        </div>
-      </section>
-
-      {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
-
-      <section className="panel-card">
+    <div className="content-stack home-page">
+      <section className="panel-card workout-list-panel">
         <div className="panel-heading">
-          <div>
-            <p className="section-label">Plan</p>
-            <h3>{workout.exercises.length} exercise blocks</h3>
-          </div>
+          <p className="section-label">Exercise plan</p>
+          <span className="pill neutral-pill">{workout.exercises.length}</span>
         </div>
+        <div className="panel-heading home-panel-heading">
+          <h1 className="home-page-title">{workout.name}</h1>
+        </div>
+        {errorMessage ? <p className="error-banner">{errorMessage}</p> : null}
         <div className="list-stack">
           {workout.exercises.map((exercise) => {
             const expanded = expandedExerciseId === exercise.exercise.id;
